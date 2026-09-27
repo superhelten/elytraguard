@@ -1,0 +1,64 @@
+<#
+.SYNOPSIS
+    Installs ElytraGuard: copies the guard to Program Files and registers a
+    SYSTEM scheduled task that runs it at startup and every 5 minutes.
+
+.PARAMETER IntervalMinutes
+    How often the guard runs.
+
+.PARAMETER GraceMinutes
+    Passed to the guard: minimum Elytra uptime before it may be stopped.
+#>
+#Requires -RunAsAdministrator
+[CmdletBinding()]
+param(
+    [ValidateRange(1, 60)][int]$IntervalMinutes = 5,
+    [ValidateRange(1, 120)][int]$GraceMinutes = 10
+)
+
+$ErrorActionPreference = 'Stop'
+$TaskName = 'ElytraGuard'
+$BinDir = Join-Path $env:ProgramFiles 'ElytraGuard'
+$LogDir = Join-Path $env:ProgramData 'ElytraGuard'
+
+# The task runs as SYSTEM, so the script must not be writable by normal users.
+# Program Files already grants Users read/execute only.
+New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
+Copy-Item (Join-Path $PSScriptRoot 'elytraguard.ps1') $BinDir -Force
+
+# Log folder: SYSTEM and Administrators write, Users read (so a log shipper
+# running as the user can read it).
+New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+$acl = New-Object System.Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true, $false)
+$inherit = 'ContainerInherit, ObjectInherit'
+foreach ($rule in @(
+        @('*S-1-5-18', 'FullControl'),       # SYSTEM
+        @('*S-1-5-32-544', 'FullControl'),   # Administrators
+        @('*S-1-5-32-545', 'ReadAndExecute') # Users
+    )) {
+    $sid = New-Object System.Security.Principal.SecurityIdentifier($rule[0].TrimStart('*'))
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, $rule[1], $inherit, 'None', 'Allow')))
+}
+Set-Acl -Path $LogDir -AclObject $acl
+
+$script = Join-Path $BinDir 'elytraguard.ps1'
+$action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+    -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$script`" -GraceMinutes $GraceMinutes"
+$triggers = @(
+    (New-ScheduledTaskTrigger -AtStartup),
+    (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes))
+)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -MultipleInstances IgnoreNew -Priority 7
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal `
+    -Description 'Stops the Elytra anti-cheat service (WARDOGS) when the game is not running. https://github.com/superhelten/elytraguard' -Force | Out-Null
+
+Start-ScheduledTask -TaskName $TaskName
+Start-Sleep -Seconds 5
+$info = Get-ScheduledTaskInfo -TaskName $TaskName
+Write-Host "ElytraGuard installed. First run result: $($info.LastTaskResult) (0 = OK)"
+Write-Host "Log: $(Join-Path $LogDir 'elytraguard.log')"
+if (Test-Path (Join-Path $LogDir 'elytraguard.log')) { Get-Content (Join-Path $LogDir 'elytraguard.log') -Tail 1 }
