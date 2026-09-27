@@ -47,11 +47,17 @@ function Write-GuardLog {
     $dir = Split-Path $LogPath
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     if ((Test-Path $LogPath) -and (Get-Item $LogPath).Length -gt 1MB) {
-        Move-Item $LogPath "$LogPath.1" -Force
+        # A log shipper may hold the file open; rotate next time instead.
+        try { Move-Item $LogPath "$LogPath.1" -Force } catch { }
     }
     $Entry['time'] = (Get-Date).ToUniversalTime().ToString('o')
-    $Entry['version'] = '1.0.0'
-    Add-Content -Path $LogPath -Value ($Entry | ConvertTo-Json -Compress) -Encoding UTF8
+    $Entry['version'] = '1.0.1'
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($Entry | ConvertTo-Json -Compress) + "`r`n")
+    # Share read/write/delete: Add-Content fails while a log shipper (e.g. a
+    # Docker bind mount) has the file open.
+    $fs = [IO.File]::Open($LogPath, [IO.FileMode]::Append, [IO.FileAccess]::Write,
+        [IO.FileShare]::ReadWrite -bor [IO.FileShare]::Delete)
+    try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
 }
 
 function Get-SteamLibraries {
@@ -167,6 +173,6 @@ catch {
     $entry.result = 'error'
     $entry.message = $_.Exception.Message
     try { $entry.service_state = [string](Get-Service -Name $ServiceName -ErrorAction Stop).Status } catch { }
-    Write-GuardLog $entry
+    try { Write-GuardLog $entry } catch { }
     exit 1
 }
