@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>ElytraGuard: stop the WARDOGS anti-cheat after you play</title>
+<meta name="description" content="Free, open-source Windows tool that stops the Elytra anti-cheat service when WARDOGS is not running. No telemetry, no game files touched.">
+<meta property="og:title" content="ElytraGuard">
+<meta property="og:description" content="Elytra runs while you play WARDOGS. Not after. Free and open source.">
+<meta property="og:type" content="website">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23F59E0B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #020617;
+    --surface: #0E1223;
+    --surface-2: #1A1E2F;
+    --fg: #F8FAFC;
+    --fg-muted: #A3B1C6;
+    --border: #334155;
+    --accent: #F59E0B;
+    --on-accent: #0B0F1A;
+    --link: #FBBF24;
+    --ok: #4ADE80;
+    --ring: #FBBF24;
+    --radius: 10px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #FFFFFF;
+      --surface: #F8FAFC;
+      --surface-2: #F1F5F9;
+      --fg: #0F172A;
+      --fg-muted: #475569;
+      --border: #CBD5E1;
+      --accent: #A16207;
+      --on-accent: #FFFFFF;
+      --link: #92400E;
+      --ok: #15803D;
+      --ring: #A16207;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  body {
+    margin: 0; overflow-wrap: break-word; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 var(--font);
+  }
+  a { color: var(--link); text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+  .skip { position: absolute; left: -9999px; }
+  .skip:focus { left: 16px; top: 16px; background: var(--surface); padding: 8px 12px; z-index: 10; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+  header.top { border-bottom: 1px solid var(--border); }
+  header.top .wrap { display: flex; align-items: center; justify-content: space-between; min-height: 60px; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--fg); text-decoration: none; letter-spacing: -0.01em; }
+  .brand svg { color: var(--accent); }
+  nav.top a { color: var(--fg-muted); text-decoration: none; margin-left: 20px; font-size: 15px; display: inline-block; padding: 8px 0; }
+  nav.top a:hover { color: var(--fg); }
+  @media (max-width: 560px) { nav.top a:not(.gh) { display: none; } }
+
+  .hero { padding-top: 72px; padding-bottom: 56px; }
+  .eyebrow { color: var(--fg-muted); font-size: 14px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 16px; }
+  h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 20px; text-wrap: balance; }
+  .lede { font-size: 19px; color: var(--fg-muted); max-width: 640px; margin: 0 0 32px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 22px;
+    border-radius: var(--radius); font-weight: 600; text-decoration: none; font-size: 16px;
+    border: 1px solid transparent; transition: background-color .2s, border-color .2s;
+  }
+  .btn-primary { background: var(--accent); color: var(--on-accent); }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { color: var(--fg); border-color: var(--border); }
+  .btn-ghost:hover { background: var(--surface-2); }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; padding: 0; margin: 28px 0 0; color: var(--fg-muted); font-size: 14px; }
+  .facts li { display: flex; align-items: center; gap: 6px; }
+  .facts svg { color: var(--ok); flex: none; }
+
+  section { padding: 56px 0; border-top: 1px solid var(--border); }
+  h2 { font-size: 28px; line-height: 1.25; letter-spacing: -0.015em; margin: 0 0 16px; }
+  h3 { font-size: 18px; margin: 0 0 6px; }
+  p { margin: 0 0 16px; max-width: 68ch; }
+  .muted { color: var(--fg-muted); }
+
+  .rules { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; counter-reset: r; }
+  .rules li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px 16px 56px; position: relative; counter-increment: r; }
+  .rules li::before { content: counter(r); position: absolute; left: 16px; top: 15px; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; font-size: 13px; font-weight: 700; color: var(--fg-muted); }
+  .rules p { margin: 0; color: var(--fg-muted); }
+
+  .steps { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .steps > li, .code { min-width: 0; }
+  .step-n { color: var(--accent); font-weight: 700; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; }
+  .code { margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+  .code-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: 13px; color: var(--fg-muted); }
+  pre {
+    margin: 0; padding: 14px 16px; overflow-x: auto; font: 14px/1.6 var(--mono); color: var(--fg);
+  }
+  code { font-family: var(--mono); font-size: .92em; }
+  p code, li code, td code, summary code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; overflow-wrap: anywhere; }
+  pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+  .copy {
+    min-height: 32px; min-width: 64px; padding: 0 12px;
+    font: 600 13px var(--font); color: var(--fg); background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 7px; cursor: pointer;
+  }
+  .copy:hover { border-color: var(--fg-muted); }
+
+  .table-wrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { background: var(--surface); font-weight: 600; }
+  td:first-child { white-space: nowrap; }
+
+  details { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); margin-bottom: 10px; }
+  summary { cursor: pointer; padding: 14px 18px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; min-height: 48px; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--fg-muted); font-weight: 400; font-size: 20px; line-height: 1; }
+  details[open] summary::after { content: "\2212"; }
+  details > div { padding: 0 18px 4px; color: var(--fg-muted); }
+
+  .note { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 14px 18px; color: var(--fg-muted); }
+  .note p:last-child { margin-bottom: 0; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0 48px; color: var(--fg-muted); font-size: 14px; }
+  footer p { max-width: none; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="ElytraGuard home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      ElytraGuard
+    </a>
+    <nav class="top" aria-label="Page">
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/superhelten/elytraguard">Source</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap hero" id="top">
+    <p class="eyebrow">For WARDOGS players on Windows</p>
+    <h1>Elytra runs while you play. Not after.</h1>
+    <p class="lede">WARDOGS starts the Elytra anti-cheat as a Windows service with full system rights. It can keep running after you close the game. ElytraGuard stops it once the game is gone. It is free, open source and small enough to read in five minutes.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+        Download (.zip)
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/superhelten/elytraguard">Read the source</a>
+    </div>
+    <ul class="facts">
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Never acts while the game runs</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No network, no telemetry</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Game files untouched</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>MIT licensed</li>
+    </ul>
+  </div>
+
+  <section id="why">
+    <div class="wrap">
+      <h2>Why</h2>
+      <p>In September 2026 WARDOGS replaced Easy Anti-Cheat with <strong>Elytra</strong>, made by VAIIYA. It installs a Windows service, <code>Elytra.Service</code>, that runs as <strong>LocalSystem</strong>, the most privileged account on your PC. The game starts the service when it launches, and it can keep running after you quit.</p>
+      <p>Anti-cheat during a match is part of the deal. Anti-cheat running with full system rights while you browse, work or bank is not. ElytraGuard makes sure Elytra only runs while you play.</p>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="muted">A scheduled task runs <code>elytraguard.ps1</code> as SYSTEM at startup and every 5 minutes. On each run it checks the following, in order:</p>
+      <ol class="rules">
+        <li><h3>Is Elytra running?</h3><p>If it isn't, nothing to do.</p></li>
+        <li><h3>Is the game running?</h3><p>If any process from the WARDOGS install folder is running, Elytra is left alone. ElytraGuard finds that folder through your Steam libraries, so this still works if a game update renames its executables.</p></li>
+        <li><h3>Did Elytra just start?</h3><p>If the service started less than 10 minutes ago, it is left alone, so a game that is still loading is never cut off.</p></li>
+        <li><h3>Otherwise, stop it.</h3><p>It uses the standard Windows service stop, the same thing the Services app does. The next time you launch WARDOGS, the game starts Elytra again as usual.</p></li>
+      </ol>
+      <p style="margin-top:20px">Every run writes one line to <code>C:\ProgramData\ElytraGuard\elytraguard.log</code>, so you can always see what it did and why.</p>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <h2>Install</h2>
+      <p class="muted">You need Windows 10 or 11 and an administrator account. There is nothing else to install: it uses the PowerShell that ships with Windows.</p>
+      <ol class="steps">
+        <li>
+          <span class="step-n">Step 1</span>
+          <h3>Download and unzip</h3>
+          <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">elytraguard.zip</a> and extract it, for example to your Downloads folder. To check that the download wasn't tampered with, compare its hash with <code>SHA256SUMS.txt</code> on the <a href="https://github.com/superhelten/elytraguard/releases/latest">release page</a>:</p>
+          <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>Get-FileHash "$HOME\Downloads\elytraguard.zip" -Algorithm SHA256</code></pre></div>
+        </li>
+        <li>
+          <span class="step-n">Step 2</span>
+          <h3>Run the installer as administrator</h3>
+          <p>Right-click Start, choose <strong>Terminal (Admin)</strong>, then run:</p>
+          <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>cd "$HOME\Downloads\elytraguard"
+Get-ChildItem *.ps1 | Unblock-File
+powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
+          <p class="muted" style="margin-top:10px">This copies ElytraGuard to <code>C:\Program Files\ElytraGuard</code>, where normal programs can't change it, and registers the <code>ElytraGuard</code> scheduled task.</p>
+        </li>
+        <li>
+          <span class="step-n">Step 3</span>
+          <h3>Check that it works</h3>
+          <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>&amp; "$env:ProgramFiles\ElytraGuard\status.ps1"</code></pre></div>
+          <p class="muted" style="margin-top:10px">It prints the last runs and either <strong>OK</strong> or what is wrong. The real test is your next match: while you play it shows <code>game_running</code>, and a few minutes after you quit it shows <code>stopped</code>.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <h2>Reading the log</h2>
+      <p class="muted">Each run logs a <code>result</code>:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">result</th><th scope="col">meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>idle</code></td><td>Elytra not running, nothing to do</td></tr>
+            <tr><td><code>game_running</code></td><td>You're playing, Elytra left alone</td></tr>
+            <tr><td><code>grace</code></td><td>Elytra started recently, left alone for now</td></tr>
+            <tr><td><code>stopped</code></td><td>Elytra was stopped</td></tr>
+            <tr><td><code>no_service</code></td><td>Elytra isn't installed</td></tr>
+            <tr><td><code>error</code></td><td>Something failed; the line says what</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:20px">Running a log stack such as Loki and Grafana? The <a href="https://github.com/superhelten/elytraguard#push-alerts-optional">README</a> has three ready-made alert rules. They tell you if the guard stops running, if Elytra keeps running without the game, or if the guard reports an error.</p>
+    </div>
+  </section>
+
+  <section id="uninstall">
+    <div class="wrap">
+      <h2>Uninstall</h2>
+      <p class="muted">From the same folder, in an admin terminal. This removes the task and the program folder. Elytra and WARDOGS are not touched.</p>
+      <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs</code></pre></div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>FAQ</h2>
+      <details>
+        <summary>Can this get me banned?</summary>
+        <div><p>ElytraGuard never acts while the game is running. It only stops the service after you have quit, and the game starts the service again on the next launch. It doesn't modify, block or hide from Elytra. That said, it is not affiliated with or approved by the game's makers, so there is no guarantee. Read the game's terms, and use it at your own risk.</p></div>
+      </details>
+      <details>
+        <summary>Does it touch game or anti-cheat files?</summary>
+        <div><p>No. It reads the Steam library index to find the game folder, and it lists running processes. The only thing it changes is the running state of <code>Elytra.Service</code>.</p></div>
+      </details>
+      <details>
+        <summary>Why does it need administrator rights?</summary>
+        <div><p>Elytra runs as LocalSystem, and only an administrator or SYSTEM can stop it. The scheduled task runs as SYSTEM. That is also why the script is installed where normal programs can't edit it.</p></div>
+      </details>
+      <details>
+        <summary>Does it send any data anywhere?</summary>
+        <div><p>No. It makes no network connections at all. The log stays on your PC. This page has no analytics, cookies or trackers either.</p></div>
+      </details>
+      <details>
+        <summary>What if WARDOGS or Elytra updates?</summary>
+        <div><p>The game is detected by its install folder, not only by process names, and Elytra by its service or program path. If the game folder can't be found, the guard falls back to known process names and logs a warning. <code>status.ps1</code> then shows NOT OK.</p></div>
+      </details>
+      <details>
+        <summary>Is Elytra kernel-level?</summary>
+        <div><p>Public reports disagree, and the game's privacy policy doesn't name Elytra. ElytraGuard stops the Windows service that Elytra installs. It does not inspect or unload drivers.</p></div>
+      </details>
+      <details>
+        <summary>Linux or Steam Deck?</summary>
+        <div><p>No. ElytraGuard is Windows only, because the service it manages is a Windows service.</p></div>
+      </details>
+    </div>
+  </section>
+
+  <section id="source">
+    <div class="wrap">
+      <div class="note">
+        <p><strong>Read before you run.</strong> ElytraGuard is about 200 lines of plain PowerShell. Anything that runs with administrator rights should be something you can inspect. The full source, history and issues are on <a href="https://github.com/superhelten/elytraguard">GitHub</a>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>ElytraGuard is an independent open-source project. It is not affiliated with Bulkhead, Team17, VAIIYA or Embark Studios. WARDOGS and Elytra are the property of their respective owners.</p>
+    <p>MIT License · <a href="https://github.com/superhelten/elytraguard">Source</a> · <a href="https://github.com/superhelten/elytraguard/issues">Report an issue</a></p>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = b.closest('.code').querySelector('pre').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = 'Copied';
+        setTimeout(function () { b.textContent = 'Copy'; }, 1600);
+      }, function () { b.textContent = 'Select'; });
+    });
+  });
+  if (!navigator.clipboard) document.querySelectorAll('.copy').forEach(function (b) { b.hidden = true; });
+</script>
+</body>
+</html>
