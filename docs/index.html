@@ -217,7 +217,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
           <span class="step-n">Step 3</span>
           <h3>Check that it works</h3>
           <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>&amp; "$env:ProgramFiles\ElytraGuard\status.ps1"</code></pre></div>
-          <p class="muted" style="margin-top:10px">It prints the last runs and either <strong>OK</strong> or what is wrong. The real test is your next match: while you play it shows <code>game_running</code>, and a few minutes after you quit it shows <code>stopped</code>.</p>
+          <p class="muted" style="margin-top:10px">It starts with <strong>OK</strong> or <strong>NOT OK</strong> and what is wrong, says whether Elytra is running right now, and lists what the guard did recently. The real test is your next match: while you play it shows <em>WARDOGS open, Elytra left running</em>, and a few minutes after you quit, <em>WARDOGS closed, Elytra stopped by ElytraGuard</em>.</p>
         </li>
       </ol>
     </div>

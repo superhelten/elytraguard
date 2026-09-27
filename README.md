@@ -61,13 +61,31 @@ The installer:
 & "$env:ProgramFiles\ElytraGuard\status.ps1"
 ```
 
-This prints the last runs and either `OK` or what is wrong. It reports:
+This prints a verdict, whether Elytra is running right now, and what the
+guard did recently, with identical runs merged into one line:
+
+```
+ElytraGuard: OK
+  Elytra anti-cheat is stopped right now.
+  Last check 1 min ago (checks run every 5 min).
+
+What happened:
+  13:41-14:31  WARDOGS open, Elytra left running (11 checks)
+  14:36        WARDOGS closed, Elytra stopped by ElytraGuard
+  14:41-14:46  Nothing to do, Elytra already stopped (2 checks)
+
+Scheduled task details need an admin prompt; that is normal.
+```
+
+It shows `NOT OK` and exits with code 1 for:
 
 - a task that is disabled or has stopped running;
+- a missing or empty log;
 - warnings or errors in the log;
 - Elytra still running without the game after several runs.
 
-Run it elevated to see the task details too.
+Run it elevated to see the task details too. `tests\status.tests.ps1` checks
+this output against sample logs.
 
 The `result` field in the log is one of:
 
