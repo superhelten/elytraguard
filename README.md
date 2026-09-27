@@ -48,8 +48,9 @@ Get-ChildItem *.ps1 | Unblock-File     # if you downloaded a zip
 
 The installer:
 
-- copies the guard to `C:\Program Files\ElytraGuard`. Normal users can't
-  write there, which matters because the task runs as SYSTEM.
+- copies the guard and `status.ps1` to `C:\Program Files\ElytraGuard`.
+  Normal users can't write there, which matters because the task runs as
+  SYSTEM.
 - creates the log folder. Users can read it, but only SYSTEM and
   Administrators can write to it.
 - registers the `ElytraGuard` task.
@@ -57,7 +58,7 @@ The installer:
 ## Is it working?
 
 ```powershell
-.\status.ps1
+& "$env:ProgramFiles\ElytraGuard\status.ps1"
 ```
 
 This prints the last runs and either `OK` or what is wrong. It reports:

@@ -24,7 +24,7 @@ $LogDir = Join-Path $env:ProgramData 'ElytraGuard'
 # The task runs as SYSTEM, so the script must not be writable by normal users.
 # Program Files already grants Users read/execute only.
 New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
-Copy-Item (Join-Path $PSScriptRoot 'elytraguard.ps1') $BinDir -Force
+foreach ($f in 'elytraguard.ps1', 'status.ps1') { Copy-Item (Join-Path $PSScriptRoot $f) $BinDir -Force }
 
 # Log folder: SYSTEM and Administrators write, Users read (so a log shipper
 # running as the user can read it).
@@ -61,4 +61,5 @@ Start-Sleep -Seconds 5
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
 Write-Host "ElytraGuard installed. First run result: $($info.LastTaskResult) (0 = OK)"
 Write-Host "Log: $(Join-Path $LogDir 'elytraguard.log')"
+Write-Host "Check health any time: & `"$BinDir\status.ps1`""
 if (Test-Path (Join-Path $LogDir 'elytraguard.log')) { Get-Content (Join-Path $LogDir 'elytraguard.log') -Tail 1 }
