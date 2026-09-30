@@ -27,13 +27,21 @@ usual.
    `WardogsClient-Win64-Shipping`), leave Elytra alone. The install folder is
    found through your Steam libraries, so this still works if a game update
    renames its executables.
+
+   The run then stays and waits for the game to close, without using any
+   CPU. Once the game has been closed for 45 seconds it carries on with the
+   steps below, so Elytra stops about a minute after you quit instead of at
+   the next run. The 45 seconds cover the switch from launcher to game
+   client.
 3. If the service started less than 10 minutes ago, or its start time can't
    be read, leave it alone. A game that is still starting up is never cut
    off.
 4. Otherwise, stop the service.
 
 Every run appends one JSON line to
-`C:\ProgramData\ElytraGuard\elytraguard.log`, which rotates at 1 MB.
+`C:\ProgramData\ElytraGuard\elytraguard.log`, which rotates at 1 MB. A run
+that is waiting for the game adds a `game_running` line every 5 minutes, just
+as the scheduled runs it stands in for would.
 
 ## Install
 

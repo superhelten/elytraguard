@@ -49,8 +49,10 @@ $triggers = @(
     (New-ScheduledTaskTrigger -AtStartup),
     (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $IntervalMinutes))
 )
+# A run that finds the game open lasts until the game closes. The one-day
+# limit only ends a run that has hung; the next trigger starts a fresh one.
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 2) -MultipleInstances IgnoreNew -Priority 7
+    -ExecutionTimeLimit (New-TimeSpan -Days 1) -MultipleInstances IgnoreNew -Priority 7
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal `
