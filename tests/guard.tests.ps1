@@ -11,6 +11,9 @@ param()
 $ErrorActionPreference = 'Stop'
 $guard = Join-Path $PSScriptRoot '..\elytraguard.ps1'
 $work = Join-Path ([IO.Path]::GetTempPath()) "elytraguard-guard-tests-$PID"
+if (Get-Process -Name 'WardogsLauncher-Shipping', 'WardogsClient-Win64-Shipping' -ErrorAction SilentlyContinue) {
+    throw 'Close WARDOGS first: the guard would wait for it to close.'
+}
 New-Item -ItemType Directory -Force $work | Out-Null
 
 # A stand-in for the game: ping.exe under a known WARDOGS process name. It
@@ -32,6 +35,12 @@ $cases = @(
     @{
         name = 'waits for the game to close'
         args = $quick; game = 5
+        first = 'game_running'; want = 'would_stop'
+    }
+    @{
+        # A short session: the game has come and gone, so no grace is needed.
+        name = 'no grace after the game closed'
+        args = @('-ServiceName', $running, '-GraceMinutes', 100000, '-SettleSeconds', 1); game = 4
         first = 'game_running'; want = 'would_stop'
     }
     @{
@@ -73,7 +82,9 @@ foreach ($exe in $hosts) {
         }
         finally {
             foreach ($p in $started) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-            Get-Process -Name 'WardogsLauncher-Shipping' -ErrorAction SilentlyContinue | Stop-Process -Force
+            # The second stand-in, started by the wrapper; never the real game.
+            Get-Process -Name 'WardogsLauncher-Shipping' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $fakeGame } | Stop-Process -Force
         }
 
         $lines = @()
