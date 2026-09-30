@@ -27,12 +27,17 @@
 
 .PARAMETER DryRun
     Log what would happen without stopping anything.
+
+.PARAMETER ServiceName
+    The Elytra service. If no service has this name, one running from an
+    Elytra folder is used instead.
 #>
 [CmdletBinding()]
 param(
     [int]$GraceMinutes = 10,
     [string]$LogPath = (Join-Path $env:ProgramData 'ElytraGuard\elytraguard.log'),
-    [switch]$DryRun
+    [switch]$DryRun,
+    [string]$ServiceName = 'Elytra.Service'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,12 +45,10 @@ Set-StrictMode -Version 2
 
 $WardogsAppId = '1867240'
 $KnownGameProcesses = @('WardogsLauncher-Shipping', 'WardogsClient-Win64-Shipping')
-$ServiceName = 'Elytra.Service'
 
 function Write-GuardLog {
     param([hashtable]$Entry)
-    $dir = Split-Path $LogPath
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    New-Item -ItemType Directory -Path (Split-Path $LogPath) -Force | Out-Null
     if ((Test-Path $LogPath) -and (Get-Item $LogPath).Length -gt 1MB) {
         # A log shipper may hold the file open; rotate next time instead.
         try { Move-Item $LogPath "$LogPath.1" -Force } catch { }
@@ -103,76 +106,64 @@ function Get-ElytraService {
 }
 
 function Test-GameRunning {
-    param([string]$GameDir)
-    if (Get-Process -Name $KnownGameProcesses -ErrorAction SilentlyContinue) { return $true }
-    if ($GameDir) {
-        $prefix = $GameDir.TrimEnd('\') + '\'
-        $hit = Get-CimInstance Win32_Process |
-            Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) } |
-            Select-Object -First 1
-        if ($hit) { return $true }
+    param($Processes, [string]$GameDir)
+    $prefix = if ($GameDir) { $GameDir.TrimEnd('\') + '\' } else { $null }
+    foreach ($p in $Processes) {
+        if ($KnownGameProcesses -contains [IO.Path]::GetFileNameWithoutExtension($p.Name)) { return $true }
+        if ($prefix -and $p.ExecutablePath -and
+            $p.ExecutablePath.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $true }
     }
     $false
 }
 
-$entry = @{ level = 'info' }
-try {
+# Decides what to do, stops the service if it should, and returns the result.
+# Everything else worth logging goes into $Entry.
+function Invoke-Guard {
+    param([hashtable]$Entry)
     $svc = Get-ElytraService
-    if (-not $svc) {
-        $entry.result = 'no_service'
-        Write-GuardLog $entry
-        return
-    }
-    $entry.service = $svc.Name
-    $entry.service_state = $svc.State
-
-    if ($svc.State -ne 'Running') {
-        $entry.result = 'idle'
-        Write-GuardLog $entry
-        return
-    }
+    if (-not $svc) { return 'no_service' }
+    $Entry.service = $svc.Name
+    $Entry.service_state = $svc.State
+    if ($svc.State -ne 'Running') { return 'idle' }
 
     $gameDir = Get-WardogsDir
-    $entry.game_dir_found = [bool]$gameDir
-    $entry.game_running = Test-GameRunning $gameDir
+    $Entry.game_dir_found = [bool]$gameDir
     if (-not $gameDir) {
         # Still safe thanks to the known process names, but detection is weaker.
-        $entry.level = 'warn'
-        $entry.message = 'WARDOGS install folder not found; using known process names only'
+        $Entry.level = 'warn'
+        $Entry.message = 'WARDOGS install folder not found; using known process names only'
     }
+    $procs = @(Get-CimInstance Win32_Process)
+    $Entry.game_running = Test-GameRunning $procs $gameDir
+    if ($Entry.game_running) { return 'game_running' }
 
-    if ($entry.game_running) {
-        $entry.result = 'game_running'
-        Write-GuardLog $entry
-        return
-    }
+    # CreationDate is readable without admin rights, unlike Process.StartTime.
+    $svcProc = $procs | Where-Object { $_.ProcessId -eq $svc.ProcessId } | Select-Object -First 1
+    if (-not ($svcProc -and $svcProc.CreationDate)) { return 'grace' }
+    $uptime = ((Get-Date) - $svcProc.CreationDate).TotalMinutes
+    $Entry.uptime_min = [math]::Round($uptime, 1)
+    if ($uptime -lt $GraceMinutes) { return 'grace' }
+    if ($DryRun) { return 'would_stop' }
 
-    $uptime = $null
-    try { $uptime = ((Get-Date) - (Get-Process -Id $svc.ProcessId).StartTime).TotalMinutes } catch { }
-    if ($null -ne $uptime) { $entry.uptime_min = [math]::Round($uptime, 1) }
-    if ($null -eq $uptime -or $uptime -lt $GraceMinutes) {
-        $entry.result = 'grace'
-        Write-GuardLog $entry
-        return
-    }
+    # Stop-Service waits forever; a hung stop would hit the task's time limit
+    # and leave no log line. Time out here instead, so it is logged as an error.
+    Stop-Service -Name $svc.Name -Force -NoWait
+    (Get-Service -Name $svc.Name).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
+    $Entry.service_state = 'Stopped'
+    'stopped'
+}
 
-    if ($DryRun) {
-        $entry.result = 'would_stop'
-        Write-GuardLog $entry
-        return
-    }
-
-    Stop-Service -Name $svc.Name -Force
-    (Get-Service -Name $svc.Name).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(15))
-    $entry.service_state = [string](Get-Service -Name $svc.Name).Status
-    $entry.result = 'stopped'
+$entry = @{ level = 'info' }
+try {
+    $entry.result = Invoke-Guard $entry
     Write-GuardLog $entry
 }
 catch {
     $entry.level = 'error'
     $entry.result = 'error'
     $entry.message = $_.Exception.Message
-    try { $entry.service_state = [string](Get-Service -Name $ServiceName -ErrorAction Stop).Status } catch { }
+    $name = if ($entry.ContainsKey('service')) { $entry.service } else { $ServiceName }
+    try { $entry.service_state = [string](Get-Service -Name $name -ErrorAction Stop).Status } catch { }
     try { Write-GuardLog $entry } catch { }
     exit 1
 }

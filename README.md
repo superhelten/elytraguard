@@ -84,8 +84,7 @@ It shows `NOT OK` and exits with code 1 for:
 - warnings or errors in the log;
 - Elytra still running without the game after several runs.
 
-Run it elevated to see the task details too. `tests\status.tests.ps1` checks
-this output against sample logs.
+Run it elevated to see the task details too.
 
 The `result` field in the log is one of:
 
@@ -117,6 +116,15 @@ sum(count_over_time({job="elytraguard"} | json | service_state="Running" | game_
 # Guard reported a problem: alert when > 0
 sum(count_over_time({job="elytraguard", level=~"warn|error"} [10m]))
 ```
+
+## Tests
+
+Neither needs admin rights; both run under Windows PowerShell 5.1 and
+PowerShell 7.
+
+- `tests\status.tests.ps1` checks the status output against sample logs.
+- `tests\guard.tests.ps1` runs the guard with `-DryRun` against real
+  services and a stand-in game process, so nothing is ever stopped.
 
 ## Uninstall
 
