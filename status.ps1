@@ -20,10 +20,13 @@ function Get-Description($entry) {
         'grace'        { 'Elytra started recently, waiting' }
         'would_stop'   { 'Dry run: would have stopped Elytra' }
         'no_service'   { 'Elytra is not installed' }
+        'accepted'     { "An admin accepted Elytra's current setup" }
         'error'        { "Error: $($entry.message)" }
         default        { "Result '$($entry.result)'" }
     }
     if ($entry.level -eq 'warn' -and $entry.message) { $text += " (warning: $($entry.message))" }
+    elseif ($entry.footprint -eq 'recorded') { $text += " (recorded Elytra's setup)" }
+    elseif ($entry.footprint -eq 'updated') { $text += " ($($entry.message))" }
     $text
 }
 
@@ -121,7 +124,9 @@ if ($last) {
     # Collapse runs that logged the same thing into one line.
     $groups = @()
     foreach ($l in $lines) {
-        $key = "$($l.result)|$($l.level)|$($l.message)"
+        # A routine "same" check counts as nothing new; recording or updating the baseline does.
+        $fp = if ($l.footprint -ne 'same') { $l.footprint }
+        $key = "$($l.result)|$($l.level)|$($l.message)|$fp"
         if ($groups -and $groups[-1].key -eq $key) {
             $groups[-1].end = $l.when
             $groups[-1].count++

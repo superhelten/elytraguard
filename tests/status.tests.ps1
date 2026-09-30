@@ -90,6 +90,27 @@ $cases = @(
         want = @(" - $((Get-Date).ToString('MM-dd')) ", 'Nothing to do, Elytra already stopped (2 checks)')
     }
     @{
+        name = 'Elytra updated'
+        log  = @((Line 11 idle ($idle + @{ footprint = 'recorded' })), (Line 6 idle ($idle + @{ footprint = 'same' })),
+                 (Line 1 idle ($idle + @{ footprint = 'updated'; message = 'Elytra updated: service.exe changed (ABCD1234)' })))
+        exit = 0
+        want = @('ElytraGuard: OK', "Nothing to do, Elytra already stopped (recorded Elytra's setup)",
+                 'Nothing to do, Elytra already stopped' + [Environment]::NewLine,
+                 'Nothing to do, Elytra already stopped (Elytra updated: service.exe changed (ABCD1234))')
+    }
+    @{
+        name = 'Elytra changed'
+        log  = @((Line 1 idle ($idle + @{ footprint = 'changed'; level = 'warn'; message = "Elytra changed: start type 'Manual' -> 'Auto'" })))
+        exit = 1
+        want = @('ElytraGuard: NOT OK', "1 warning in the last hour. Latest: Elytra changed: start type 'Manual' -> 'Auto'")
+    }
+    @{
+        name = 'changes accepted'
+        log  = @((Line 1 accepted ($idle + @{ footprint = 'accepted' })))
+        exit = 0
+        want = @('ElytraGuard: OK', "An admin accepted Elytra's current setup")
+    }
+    @{
         name = 'empty log'
         log  = @()
         exit = 1
