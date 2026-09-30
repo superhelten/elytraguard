@@ -133,7 +133,7 @@ if ($last) {
     $shown = @($groups | Select-Object -Last 5 | ForEach-Object {
         $label = Format-When $_.start
         if ($_.count -gt 1 -and $_.end -ne $_.start) {
-            $label = if ($_.end.Date -eq $_.start.Date) { "$label-$($_.end.ToString('HH:mm'))" } else { "$label - $(Format-When $_.end)" }
+            $label = if ($_.end.Date -eq $_.start.Date) { "$label-$($_.end.ToString('HH:mm'))" } else { "$label - $($_.end.ToString('MM-dd HH:mm'))" }
         }
         $text = Get-Description $_.entry
         if ($_.count -gt 1) { $text += " ($($_.count) checks)" }

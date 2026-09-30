@@ -84,6 +84,12 @@ $cases = @(
         want = @((Get-Date).AddMinutes(-1500).ToString('MM-dd'), 'Nothing to do, Elytra already stopped (2 checks)')
     }
     @{
+        name = 'a stretch across midnight dates both ends'
+        log  = @((Line 1500 idle $idle), (Line 1 idle $idle))
+        exit = 0
+        want = @(" - $((Get-Date).ToString('MM-dd')) ", 'Nothing to do, Elytra already stopped (2 checks)')
+    }
+    @{
         name = 'empty log'
         log  = @()
         exit = 1
