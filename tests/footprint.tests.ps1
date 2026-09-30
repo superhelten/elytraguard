@@ -22,8 +22,10 @@ if (-not $Inner) {
 . (Join-Path $PSScriptRoot '..\elytraguard.ps1')
 $exe = if ($PSVersionTable.PSEdition -eq 'Core') { 'pwsh.exe' } else { 'powershell.exe' }
 
-function File($path, $hash, $signer = 'Vaiiya Corporate Limited') {
-    [pscustomobject]@{ path = $path; sha256 = $hash; signer = $signer }
+# A file record; $thumb '' means not signed.
+function File($path, $hash, $thumb = 'T1', $signer = 'Vaiiya Corporate Limited') {
+    if (-not $thumb) { $signer = '' }
+    [pscustomobject]@{ path = $path; sha256 = $hash; signer = $signer; thumbprint = $thumb; chain = $(if ($thumb) { "$thumb>ROOT" } else { '' }) }
 }
 function Footprint([hashtable]$service = @{}, $files = $null, $related = @(), [bool]$inWindows = $false) {
     $svc = @{
@@ -53,8 +55,14 @@ $cases = @(
     }
     @{
         name = 'a new file signed by someone else'
-        new  = (Footprint -files @((File 'control.exe' 'AAAA1111'), (File 'service.exe' 'BBBB2222'), (File 'x.dll' 'DDDD4444' 'Someone Else')))
-        want = @("warn:x.dll added, signed by 'Someone Else'")
+        new  = (Footprint -files @((File 'control.exe' 'AAAA1111'), (File 'service.exe' 'BBBB2222'), (File 'x.dll' 'DDDD4444' 'T9' 'Someone Else')))
+        want = @("warn:x.dll added, signed with a new certificate: 'Someone Else' T9")
+    }
+    @{
+        # Same company name on another certificate: not trusted on the name alone.
+        name = 'the same company name on another certificate'
+        new  = (Footprint -files @((File 'control.exe' 'AAAA1111'), (File 'service.exe' 'CCCC3333' 'T2')))
+        want = @("warn:service.exe changed, signed with a new certificate: 'Vaiiya Corporate Limited' T2")
     }
     @{
         name = 'a driver file, even from the same company'
@@ -132,13 +140,14 @@ $svc = [pscustomobject]@{
     StartMode = 'Manual'; StartName = 'LocalSystem'; ServiceType = 'Own Process'
 }
 $serviceHash = (Get-FileHash (Join-Path $work 'service.exe') -Algorithm SHA256).Hash
-$previous = [pscustomobject]@{ files = @((File 'service.exe' $serviceHash 'Remembered Signer')) }
+$previous = [pscustomobject]@{ files = @((File 'service.exe' $serviceHash 'REMEMBERED' 'Remembered Signer')) }
 $fp = Get-ElytraFootprint $svc $previous
 $paths = @($fp.files | ForEach-Object { $_.path })
 $why = @()
 if (($paths -join ',') -ne 'bin\helper.dll,service.exe') { $why += "files '$($paths -join ',')'" }
-if (@($fp.files | Where-Object { $_.path -eq 'bin\helper.dll' }).signer -ne '') { $why += 'unsigned file got a signer' }
-if (@($fp.files | Where-Object { $_.path -eq 'service.exe' }).signer -ne 'Remembered Signer') { $why += 'known hash was checked again' }
+$helper = @($fp.files | Where-Object { $_.path -eq 'bin\helper.dll' })[0]
+if ($helper.signer -or $helper.thumbprint) { $why += 'unsigned file got a signer' }
+if (@($fp.files | Where-Object { $_.path -eq 'service.exe' })[0].thumbprint -ne 'REMEMBERED') { $why += 'known hash was checked again' }
 if ($fp.service.path -ne (Join-Path $work 'service.exe')) { $why += "service path '$($fp.service.path)'" }
 if ($fp.dir_in_windows) { $why += 'temp folder taken for the Windows folder' }
 if ($fp.service.dacl) { $why += 'permissions read for a service that does not exist' }
@@ -166,7 +175,8 @@ else { Write-Host "pass [$exe] no inventory of the Windows folder" -ForegroundCo
 $work = Join-Path ([IO.Path]::GetTempPath()) "elytraguard-footprint-gone-$PID"
 New-Item -ItemType Directory -Force $work | Out-Null
 $BaselinePath = Join-Path $work 'elytra-baseline.json'
-[pscustomobject]@{ dir = $work } | ConvertTo-Json | Set-Content $BaselinePath
+$StateKey = "HKCU:\Software\ElytraGuardTests\footprint-$PID"
+Save-Baseline ([pscustomobject]@{ dir = $work })
 $why = @()
 $e = @{ level = 'info' }
 Update-Footprint $e $null
@@ -181,11 +191,47 @@ $e = @{ level = 'info' }
 Update-Footprint $e $null
 if ($e.level -ne 'info') { $why += 'still warns after accepting' }
 Remove-Item $work -Recurse -Force
+Remove-Item $StateKey -Recurse -ErrorAction SilentlyContinue
 if ($why) {
     $failed++
     Write-Host "FAIL [$exe] Elytra gone, folder left behind" -ForegroundColor Red
     $why | ForEach-Object { Write-Host "     $_" }
 }
 else { Write-Host "pass [$exe] Elytra gone, folder left behind" -ForegroundColor Green }
+
+# Only a valid signature counts: a certificate Windows doesn't trust, or a
+# signed file changed afterwards, reads as not signed.
+$work = Join-Path ([IO.Path]::GetTempPath()) "elytraguard-signer-$PID"
+New-Item -ItemType Directory -Force $work | Out-Null
+$cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Vaiiya Corporate Limited' -CertStoreLocation Cert:\CurrentUser\My
+$why = @()
+try {
+    $script = Join-Path $work 'signed.ps1'
+    Set-Content $script "'hello'"
+    Set-AuthenticodeSignature $script $cert | Out-Null
+    $s = Get-Signer $script
+    if ($s.signer -or $s.thumbprint) { $why += "untrusted certificate accepted as '$($s.signer)'" }
+    Add-Content $script "'changed'"
+    $s = Get-Signer $script
+    if ($s.signer -or $s.thumbprint) { $why += 'tampered file accepted' }
+}
+finally {
+    Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -ErrorAction SilentlyContinue
+    Remove-Item $work -Recurse -Force
+}
+# A validly signed program, if this machine has one to hand.
+$signed = @("$PSHOME\pwsh.exe", "$env:ProgramFiles\PowerShell\7\pwsh.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($signed) {
+    $s = Get-Signer $signed
+    if (-not $s.signer -or $s.thumbprint -notmatch '^[0-9A-F]{40}$' -or $s.chain -notlike "$($s.thumbprint)>*") {
+        $why += "valid signature read as '$($s.signer)' / '$($s.thumbprint)' / '$($s.chain)'"
+    }
+}
+if ($why) {
+    $failed++
+    Write-Host "FAIL [$exe] only valid signatures count" -ForegroundColor Red
+    $why | ForEach-Object { Write-Host "     $_" }
+}
+else { Write-Host "pass [$exe] only valid signatures count" -ForegroundColor Green }
 
 if ($failed) { exit 1 }

@@ -13,5 +13,7 @@ Unregister-ScheduledTask -TaskName 'ElytraGuard' -Confirm:$false -ErrorAction Si
 Remove-Item (Join-Path $env:ProgramFiles 'ElytraGuard') -Recurse -Force -ErrorAction SilentlyContinue
 if ($RemoveLogs) {
     Remove-Item (Join-Path $env:ProgramData 'ElytraGuard') -Recurse -Force -ErrorAction SilentlyContinue
+    # The baseline's seal; without the baseline it would read as deleted.
+    Remove-Item 'HKLM:\SOFTWARE\ElytraGuard' -Recurse -Force -ErrorAction SilentlyContinue
 }
 Write-Host 'ElytraGuard removed.'

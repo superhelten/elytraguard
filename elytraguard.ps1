@@ -49,6 +49,11 @@
     files and anything else it installed. Each run compares against it; see
     README, "Watching Elytra for changes".
 
+.PARAMETER StateKey
+    Registry key holding the baseline's SHA-256, written each time the guard
+    saves the baseline. A baseline that is missing or doesn't match it is a
+    warning rather than a fresh start.
+
 .PARAMETER AcceptElytraChanges
     Record Elytra's current setup as the new baseline, then exit. Run this as
     admin after checking a change the guard warned about.
@@ -62,6 +67,7 @@ param(
     [int]$SettleSeconds = 45,
     [double]$HeartbeatMinutes = 5,
     [string]$BaselinePath = (Join-Path $env:ProgramData 'ElytraGuard\elytra-baseline.json'),
+    [string]$StateKey = 'HKLM:\SOFTWARE\ElytraGuard',
     [switch]$AcceptElytraChanges
 )
 
@@ -150,13 +156,25 @@ function Get-List {
     @(Get-Field $Object $Name | Where-Object { $null -ne $_ })
 }
 
-# Who signed a file, or '' unless the signature is valid: a tampered file
-# still carries its certificate but fails the check.
+# Who signed a file: the certificate's name, its thumbprint and the
+# thumbprints of its chain up to the root. All empty unless Windows finds the
+# signature valid: intact, and chained to a root it trusts. A tampered file
+# still carries its certificate but fails that check.
 function Get-Signer {
     param([string]$Path)
+    $none = [pscustomobject]@{ signer = ''; thumbprint = ''; chain = '' }
     $sig = Get-AuthenticodeSignature -FilePath $Path
-    if ($sig.Status -ne 'Valid') { return '' }
-    $sig.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+    if ($sig.Status -ne 'Valid' -or -not $sig.SignerCertificate) { return $none }
+    $cert = $sig.SignerCertificate
+    $chain = New-Object Security.Cryptography.X509Certificates.X509Chain
+    # Revocation lists would mean going online; validity is already Windows' verdict.
+    $chain.ChainPolicy.RevocationMode = [Security.Cryptography.X509Certificates.X509RevocationMode]::NoCheck
+    [void]$chain.Build($cert)
+    [pscustomobject]@{
+        signer     = $cert.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+        thumbprint = $cert.Thumbprint
+        chain      = @($chain.ChainElements | ForEach-Object { $_.Certificate.Thumbprint }) -join '>'
+    }
 }
 
 function Get-BinaryPath {
@@ -186,15 +204,21 @@ function Get-ElytraFootprint {
 
     # Program files only. Content\ holds data packages that change all the time.
     $known = @{}
-    foreach ($f in Get-List $Previous 'files') { $known[$f.sha256] = $f.signer }
+    foreach ($f in Get-List $Previous 'files') {
+        # Entries from before thumbprints were recorded get checked again.
+        if ($f.PSObject.Properties['thumbprint']) { $known[$f.sha256] = $f }
+    }
     $files = @()
     if (-not $inWindows -and (Test-Path $dir)) {
         $files = @(Get-ChildItem $dir -Recurse -File -Include *.exe, *.dll, *.sys -ErrorAction SilentlyContinue |
             Where-Object { -not $_.FullName.StartsWith("$($prefix)Content\", [StringComparison]::OrdinalIgnoreCase) } |
             Sort-Object FullName | ForEach-Object {
                 $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
-                $signer = if ($known.ContainsKey($hash)) { $known[$hash] } else { Get-Signer $_.FullName }
-                [pscustomobject]@{ path = $_.FullName.Substring($prefix.Length); sha256 = $hash; signer = $signer }
+                $s = if ($known.ContainsKey($hash)) { $known[$hash] } else { Get-Signer $_.FullName }
+                [pscustomobject]@{
+                    path = $_.FullName.Substring($prefix.Length); sha256 = $hash
+                    signer = "$(Get-Field $s 'signer')"; thumbprint = "$(Get-Field $s 'thumbprint')"; chain = "$(Get-Field $s 'chain')"
+                }
             })
     }
 
@@ -252,11 +276,14 @@ function Compare-ElytraFootprint {
         $changes += @{ severity = 'warn'; text = "service program moved into the Windows folder" }
     }
 
-    $signers = @{}
+    # A known signer is a known certificate, by thumbprint: another certificate
+    # with the same company name, even from a trusted CA, is not the same thing.
+    $certs = @{}
     $oldFiles = @{}
     foreach ($f in Get-List $Old 'files') {
         $oldFiles[$f.path] = $f
-        if ($f.signer) { $signers[$f.signer] = $true }
+        $t = Get-Field $f 'thumbprint'
+        if ($t) { $certs[$t] = $true }
     }
     $newPaths = @{}
     foreach ($f in Get-List $New 'files') {
@@ -264,10 +291,14 @@ function Compare-ElytraFootprint {
         $o = $oldFiles[$f.path]
         if ($o -and $o.sha256 -eq $f.sha256) { continue }
         $what = if ($o) { 'changed' } else { 'added' }
+        $thumb = "$(Get-Field $f 'thumbprint')"
+        $short = { param($s) "$s" -replace '^(.{8}).+', '$1' }
         $changes += if ($f.path -like '*.sys') { @{ severity = 'warn'; text = "driver file $($f.path) $what" } }
-        elseif (-not $f.signer) { @{ severity = 'warn'; text = "$($f.path) $what, not signed" } }
-        elseif (-not $signers.ContainsKey($f.signer)) { @{ severity = 'warn'; text = "$($f.path) $what, signed by '$($f.signer)'" } }
-        else { @{ severity = 'info'; text = "$($f.path) $what ($("$($f.sha256)" -replace '^(.{8}).+', '$1'))" } }
+        elseif (-not $thumb) { @{ severity = 'warn'; text = "$($f.path) $what, not signed" } }
+        elseif (-not $certs.ContainsKey($thumb)) {
+            @{ severity = 'warn'; text = "$($f.path) $what, signed with a new certificate: '$($f.signer)' $(& $short $thumb)" }
+        }
+        else { @{ severity = 'info'; text = "$($f.path) $what ($(& $short $f.sha256))" } }
     }
     foreach ($p in $oldFiles.Keys) {
         if (-not $newPaths.ContainsKey($p)) { $changes += @{ severity = 'info'; text = "$p removed" } }
@@ -280,12 +311,36 @@ function Compare-ElytraFootprint {
     $changes
 }
 
+# The baseline's seal: its SHA-256, kept in the registry apart from the file,
+# so a baseline that was deleted or edited behind the guard's back shows.
+function Get-Seal {
+    "$(Get-Field (Get-ItemProperty $StateKey -ErrorAction SilentlyContinue) 'BaselineSha256')"
+}
+
+function Set-Seal {
+    param([string]$Hash)
+    if (-not (Test-Path $StateKey)) { New-Item $StateKey -Force | Out-Null }
+    Set-ItemProperty $StateKey -Name BaselineSha256 -Value $Hash
+}
+
 function Save-Baseline {
     param($Footprint)
     New-Item -ItemType Directory -Path (Split-Path $BaselinePath) -Force | Out-Null
     $tmp = "$BaselinePath.tmp"
     $Footprint | ConvertTo-Json -Depth 5 | Set-Content -Path $tmp -Encoding UTF8
     Move-Item $tmp $BaselinePath -Force
+    Set-Seal (Get-FileHash $BaselinePath -Algorithm SHA256).Hash
+}
+
+# Why the baseline can't be trusted, or '' if it can. No baseline and no seal
+# is a first run.
+function Test-Baseline {
+    $seal = Get-Seal
+    $exists = Test-Path $BaselinePath
+    if (-not $exists) { if ($seal) { return 'has been deleted' } else { return '' } }
+    if (-not $seal) { return 'has no seal from ElytraGuard' }
+    if ($seal -ne (Get-FileHash $BaselinePath -Algorithm SHA256).Hash) { return 'was changed outside ElytraGuard' }
+    ''
 }
 
 # Compares Elytra's setup with the baseline and notes the outcome in $Entry.
@@ -293,6 +348,16 @@ function Save-Baseline {
 # warning on every run until an admin accepts it with -AcceptElytraChanges.
 function Update-Footprint {
     param([hashtable]$Entry, $Service)
+    if (-not $AcceptElytraChanges) {
+        # Never start over silently: that would accept whatever Elytra is now.
+        $problem = Test-Baseline
+        if ($problem) {
+            $Entry.footprint = 'unverified'
+            $Entry.level = 'warn'
+            Add-Message $Entry "The record of Elytra's setup $problem; check Elytra, then run -AcceptElytraChanges"
+            return
+        }
+    }
     $old = $null
     if (Test-Path $BaselinePath) {
         # Accepting replaces the baseline, so a damaged one mustn't block it.
@@ -301,9 +366,10 @@ function Update-Footprint {
     }
     if (-not $Service) {
         $dir = Get-Field $old 'dir'
-        if ($AcceptElytraChanges -and (Test-Path $BaselinePath)) {
+        if ($AcceptElytraChanges -and ((Test-Path $BaselinePath) -or (Get-Seal))) {
             # Elytra is gone; accepting that means forgetting its old setup.
-            Remove-Item $BaselinePath -Force
+            Remove-Item $BaselinePath -Force -ErrorAction SilentlyContinue
+            Remove-ItemProperty $StateKey -Name BaselineSha256 -ErrorAction SilentlyContinue
             $Entry.footprint = 'accepted'
         }
         elseif ($dir -and (Test-Path $dir)) {
@@ -314,7 +380,8 @@ function Update-Footprint {
         return
     }
 
-    $new = Get-ElytraFootprint $Service $old
+    # Accepting checks every signature afresh instead of trusting the old record.
+    $new = Get-ElytraFootprint $Service $(if ($AcceptElytraChanges) { $null } else { $old })
     if (-not $old -or $AcceptElytraChanges) {
         Save-Baseline $new
         $Entry.footprint = if ($old) { 'accepted' } else { 'recorded' }

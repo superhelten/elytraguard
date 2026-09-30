@@ -53,16 +53,20 @@ record:
 - the service: program, start type, account, type, dependencies,
   permissions and recovery actions;
 - the program files (`.exe`, `.dll`, `.sys`) in Elytra's folder, with their
-  SHA-256 hash and who signed them. The `Content` folder holds data packages
-  that change all the time and is left out;
+  SHA-256 hash and signing certificate: its name, thumbprint and chain. A
+  file only counts as signed if Windows finds the signature valid, meaning
+  intact and chained to a root it trusts. The `Content` folder holds data
+  packages that change all the time and is left out;
 - any other service, driver or scheduled task named after Elytra or VAIIYA,
   or running a program from Elytra's folder.
 
-An ordinary update, where program files change but are still validly signed
-by the same company, is logged as `"footprint": "updated"` and the record
-moves along. Anything else is a warning: a changed service setting, an
-unsigned file or one signed by someone else, any driver file, a new related
-service, driver or task, or Elytra's folder left behind without its service.
+An ordinary update, where program files change but are validly signed with
+a certificate already in the record, is logged as `"footprint": "updated"`
+and the record moves along. Certificates are matched by thumbprint, not by
+name, so another certificate issued to the same company name is a warning
+too. So is a changed service setting, an unsigned file, any driver file, a
+new related service, driver or task, or Elytra's folder left behind without
+its service.
 The warning appears in the log and in `status.ps1` on every run until you
 have looked at it and accept it in an elevated PowerShell:
 
@@ -72,12 +76,18 @@ have looked at it and accept it in an elevated PowerShell:
 
 The record is `C:\ProgramData\ElytraGuard\elytra-baseline.json`. Like the
 log, only SYSTEM and Administrators can change it, so a program running
-without admin rights can't rewrite it to hide a change. ElytraGuard itself
-never changes Elytra's settings or files; it only watches them.
+without admin rights can't rewrite it to hide a change. Each time the guard
+saves it, it also stores its SHA-256 in the registry, under
+`HKLM\SOFTWARE\ElytraGuard`. A record that has been deleted, edited, or has
+no matching hash is a warning (`"footprint": "unverified"`), never a quiet
+fresh start, until you accept Elytra's current setup as above. The very
+first record trusts Elytra as it is at that moment, so install ElytraGuard
+on a PC you trust. ElytraGuard itself never changes Elytra's settings or
+files; it only watches them.
 
 Not covered: a driver or service with an unrelated name, installed somewhere
 else. The `footprint` field of each log line is `recorded`, `same`,
-`updated`, `changed`, `accepted` or `error`.
+`updated`, `changed`, `unverified`, `accepted` or `error`.
 
 ## Install
 
@@ -178,7 +188,7 @@ PowerShell 7.
 
 ```powershell
 .\uninstall.ps1               # keeps the log
-.\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup
+.\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup and its hash
 ```
 
 ## License

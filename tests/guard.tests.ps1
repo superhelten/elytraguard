@@ -22,6 +22,9 @@ $fakeGame = Join-Path $work 'WardogsLauncher-Shipping.exe'
 Copy-Item (Join-Path $env:SystemRoot 'System32\PING.EXE') $fakeGame
 $marker = Join-Path $work 'second-game-exited.txt'
 $baseline = Join-Path $work 'elytra-baseline.json'
+# The baseline's seal goes to HKCU here, since HKLM needs admin rights.
+$stateKey = "HKCU:\Software\ElytraGuardTests\$PID"
+function Set-TestSeal { Set-ItemProperty $stateKey -Name BaselineSha256 -Value (Get-FileHash $baseline -Algorithm SHA256).Hash }
 
 # EventLog always runs and has been up for longer than a minute.
 $running = 'EventLog'
@@ -69,6 +72,17 @@ $cases = @(
         want = 'would_stop'; footprint = 'changed'; level = 'warn'; message = "start type 'Disabled' -> "
     }
     @{
+        # Deleting the baseline must not lead to a quiet new one.
+        name = 'a deleted baseline is a warning'
+        args = $closed; seed = @{}; delete = $true
+        want = 'would_stop'; footprint = 'unverified'; level = 'warn'; message = 'has been deleted'; noBaselineAfter = $true
+    }
+    @{
+        name = 'a baseline edited outside the guard is a warning'
+        args = $closed; seed = @{ start_mode = 'Disabled' }; reseal = $false
+        want = 'would_stop'; footprint = 'unverified'; level = 'warn'; message = 'was changed outside ElytraGuard'
+    }
+    @{
         name = 'a broken baseline does not stop the guard'
         args = $closed; corrupt = $true
         want = 'would_stop'; footprint = 'error'; level = 'warn'; message = 'Checking Elytra for changes failed'
@@ -86,15 +100,20 @@ foreach ($exe in $hosts) {
     foreach ($case in $cases) {
         $log = Join-Path $work 'elytraguard.log'
         Remove-Item $log, $marker, $baseline -ErrorAction SilentlyContinue
+        Remove-Item $stateKey -Recurse -ErrorAction SilentlyContinue
+        New-Item $stateKey -Force | Out-Null
         if ($case.seed) {
             # Record a baseline, then edit it to stand for Elytra's earlier setup.
-            & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline @($case.args) -AcceptElytraChanges | Out-Null
+            & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline -StateKey $stateKey @($case.args) -AcceptElytraChanges | Out-Null
             $b = Get-Content $baseline -Raw | ConvertFrom-Json
             foreach ($k in $case.seed.Keys) { $b.service.$k = $case.seed[$k] }
             $b | ConvertTo-Json -Depth 5 | Set-Content $baseline -Encoding UTF8
+            # As if the guard had saved it, unless the case is about an outside edit.
+            if ($case.reseal -ne $false) { Set-TestSeal }
+            if ($case.delete) { Remove-Item $baseline }
             Remove-Item $log
         }
-        if ($case.corrupt) { Set-Content $baseline '{ not json' }
+        if ($case.corrupt) { Set-Content $baseline '{ not json'; Set-TestSeal }
         $started = @()
         if ($case.game) {
             $started += Start-Process $fakeGame -ArgumentList '-n', $case.game, '127.0.0.1' -WindowStyle Hidden -PassThru
@@ -106,7 +125,7 @@ foreach ($exe in $hosts) {
         }
         try {
             $clock = [Diagnostics.Stopwatch]::StartNew()
-            $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline @($case.args) 2>&1 | Out-String
+            $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline -StateKey $stateKey @($case.args) 2>&1 | Out-String
             $code = $LASTEXITCODE
             $took = $clock.Elapsed.TotalSeconds
         }
@@ -133,6 +152,7 @@ foreach ($exe in $hosts) {
                 if ($case.$field -and $last.$field -ne $case.$field) { $why += "$field '$($last.$field)', expected '$($case.$field)'" }
             }
             if ($case.message -and -not "$($last.message)".Contains($case.message)) { $why += "message '$($last.message)'" }
+            if ($case.noBaselineAfter -and (Test-Path $baseline)) { $why += 'a new baseline was recorded' }
             if ($case.maxSeconds -and $took -gt $case.maxSeconds) { $why += "took $([int]$took) s" }
             $beats = @($lines | Where-Object { $_.result -eq 'game_running' }).Count
             if ($case.beats -and $beats -lt $case.beats) { $why += "$beats game_running lines, expected at least $($case.beats)" }
@@ -159,5 +179,6 @@ foreach ($exe in $hosts) {
 }
 
 Remove-Item $work -Recurse -Force
+Remove-Item 'HKCU:\Software\ElytraGuardTests' -Recurse -ErrorAction SilentlyContinue
 if ($failed) { Write-Host "$failed failed"; exit 1 }
 Write-Host 'all passed'
