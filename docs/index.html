@@ -155,7 +155,7 @@
   <div class="wrap hero" id="top">
     <p class="eyebrow">For WARDOGS players on Windows</p>
     <h1>Elytra runs while you play. Not after.</h1>
-    <p class="lede">WARDOGS starts the Elytra anti-cheat as a Windows service with full system rights. It can keep running after you close the game. ElytraGuard stops it once the game is gone. It is free, open source and small enough to read in five minutes.</p>
+    <p class="lede">WARDOGS starts the Elytra anti-cheat as a Windows service with full system rights. It can keep running after you close the game. ElytraGuard stops it once the game is gone. It is free, open source and plain PowerShell you can read before you run it.</p>
     <div class="cta">
       <a class="btn btn-primary" href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -237,6 +237,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
             <tr><td><code>stopped</code></td><td>Elytra was stopped</td></tr>
             <tr><td><code>would_stop</code></td><td>Dry run, nothing was stopped</td></tr>
             <tr><td><code>no_service</code></td><td>Elytra isn't installed</td></tr>
+            <tr><td><code>accepted</code></td><td>An admin accepted Elytra's current setup</td></tr>
             <tr><td><code>error</code></td><td>Something failed; the line says what</td></tr>
           </tbody>
         </table>
@@ -248,7 +249,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
   <section id="uninstall">
     <div class="wrap">
       <h2>Uninstall</h2>
-      <p class="muted">From the same folder, in an admin terminal. This removes the task and the program folder. Elytra and WARDOGS are not touched.</p>
+      <p class="muted">From the same folder, in an admin terminal. This removes the task and the program folder, and with <code>-RemoveLogs</code> also the log and the record of Elytra's setup. Elytra and WARDOGS are not touched.</p>
       <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs</code></pre></div>
     </div>
   </section>
@@ -262,11 +263,11 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
       </details>
       <details>
         <summary>Does it touch game or anti-cheat files?</summary>
-        <div><p>No. It reads the Steam library index to find the game folder, and it lists running processes. The only thing it changes is the running state of <code>Elytra.Service</code>.</p></div>
+        <div><p>It never changes them. It reads the Steam library index to find the game folder, lists running processes, and reads Elytra's service settings and program files to notice when an update changes them. The only thing it changes about Elytra is whether <code>Elytra.Service</code> is running.</p></div>
       </details>
       <details>
         <summary>Why does it need administrator rights?</summary>
-        <div><p>Elytra runs as LocalSystem, and only an administrator or SYSTEM can stop it. The scheduled task runs as SYSTEM. That is also why the script is installed where normal programs can't edit it.</p></div>
+        <div><p>The scheduled task runs as SYSTEM, and setting one up takes an administrator. Running as SYSTEM lets it see which programs run from the game folder, and keep its log and its record of Elytra's setup where normal programs can't change them. That is also why the script is installed where normal programs can't edit it.</p></div>
       </details>
       <details>
         <summary>Does it send any data anywhere?</summary>
@@ -290,7 +291,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
   <section id="source">
     <div class="wrap">
       <div class="note">
-        <p><strong>Read before you run.</strong> ElytraGuard is about 200 lines of plain PowerShell. Anything that runs with administrator rights should be something you can inspect. The full source, history and issues are on <a href="https://github.com/superhelten/elytraguard">GitHub</a>.</p>
+        <p><strong>Read before you run.</strong> ElytraGuard is one PowerShell script of about 500 lines, plus an installer and a status check. Anything that runs with administrator rights should be something you can inspect. The full source, history and issues are on <a href="https://github.com/superhelten/elytraguard">GitHub</a>.</p>
       </div>
     </div>
   </section>
