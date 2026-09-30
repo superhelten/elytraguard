@@ -301,7 +301,12 @@ function Update-Footprint {
     }
     if (-not $Service) {
         $dir = Get-Field $old 'dir'
-        if ($dir -and (Test-Path $dir)) {
+        if ($AcceptElytraChanges -and (Test-Path $BaselinePath)) {
+            # Elytra is gone; accepting that means forgetting its old setup.
+            Remove-Item $BaselinePath -Force
+            $Entry.footprint = 'accepted'
+        }
+        elseif ($dir -and (Test-Path $dir)) {
             $Entry.footprint = 'changed'
             $Entry.level = 'warn'
             Add-Message $Entry 'Elytra changed: its service is gone but its folder is still there'
@@ -387,7 +392,10 @@ function Invoke-Guard {
         $Entry.level = 'warn'
         Add-Message $Entry "Checking Elytra for changes failed: $($_.Exception.Message)"
     }
-    if (-not $svc) { return 'no_service' }
+    if (-not $svc) {
+        if ($AcceptElytraChanges) { return 'accepted' }
+        return 'no_service'
+    }
     $Entry.service = $svc.Name
     $Entry.service_state = $svc.State
     if ($AcceptElytraChanges) {

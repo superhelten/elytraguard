@@ -161,4 +161,31 @@ if (-not $fp.dir_in_windows -or @($fp.files).Count) {
 }
 else { Write-Host "pass [$exe] no inventory of the Windows folder" -ForegroundColor Green }
 
+# Elytra's service gone but its folder left behind: a warning, which
+# accepting clears by forgetting the old setup.
+$work = Join-Path ([IO.Path]::GetTempPath()) "elytraguard-footprint-gone-$PID"
+New-Item -ItemType Directory -Force $work | Out-Null
+$BaselinePath = Join-Path $work 'elytra-baseline.json'
+[pscustomobject]@{ dir = $work } | ConvertTo-Json | Set-Content $BaselinePath
+$why = @()
+$e = @{ level = 'info' }
+Update-Footprint $e $null
+if ($e.level -ne 'warn' -or "$($e['message'])" -notlike '*service is gone*') { $why += "no warning: level '$($e.level)'" }
+$AcceptElytraChanges = $true
+$e = @{ level = 'info' }
+Update-Footprint $e $null
+$AcceptElytraChanges = $false
+if ($e['footprint'] -ne 'accepted' -or $e.level -ne 'info') { $why += "accept gave footprint '$($e['footprint'])', level '$($e.level)'" }
+if (Test-Path $BaselinePath) { $why += 'baseline still there after accepting' }
+$e = @{ level = 'info' }
+Update-Footprint $e $null
+if ($e.level -ne 'info') { $why += 'still warns after accepting' }
+Remove-Item $work -Recurse -Force
+if ($why) {
+    $failed++
+    Write-Host "FAIL [$exe] Elytra gone, folder left behind" -ForegroundColor Red
+    $why | ForEach-Object { Write-Host "     $_" }
+}
+else { Write-Host "pass [$exe] Elytra gone, folder left behind" -ForegroundColor Green }
+
 if ($failed) { exit 1 }
