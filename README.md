@@ -44,6 +44,41 @@ Every run appends one JSON line to
 that is waiting for the game adds a `game_running` line every 5 minutes, just
 as the scheduled runs it stands in for would.
 
+## Watching Elytra for changes
+
+A game update can change what Elytra installs. On its first run the guard
+records how Elytra is set up, and every run after that compares against the
+record:
+
+- the service: program, start type, account, type, dependencies,
+  permissions and recovery actions;
+- the program files (`.exe`, `.dll`, `.sys`) in Elytra's folder, with their
+  SHA-256 hash and who signed them. The `Content` folder holds data packages
+  that change all the time and is left out;
+- any other service, driver or scheduled task named after Elytra or VAIIYA,
+  or running a program from Elytra's folder.
+
+An ordinary update, where program files change but are still validly signed
+by the same company, is logged as `"footprint": "updated"` and the record
+moves along. Anything else is a warning: a changed service setting, an
+unsigned file or one signed by someone else, any driver file, a new related
+service, driver or task, or Elytra's folder left behind without its service.
+The warning appears in the log and in `status.ps1` on every run until you
+have looked at it and accept it in an elevated PowerShell:
+
+```powershell
+& "$env:ProgramFiles\ElytraGuard\elytraguard.ps1" -AcceptElytraChanges
+```
+
+The record is `C:\ProgramData\ElytraGuard\elytra-baseline.json`. Like the
+log, only SYSTEM and Administrators can change it, so a program running
+without admin rights can't rewrite it to hide a change. ElytraGuard itself
+never changes Elytra's settings or files; it only watches them.
+
+Not covered: a driver or service with an unrelated name, installed somewhere
+else. The `footprint` field of each log line is `recorded`, `same`,
+`updated`, `changed`, `accepted` or `error`.
+
 ## Install
 
 Requires Windows 10 or 11 and admin rights. It uses the built-in Windows
@@ -105,6 +140,7 @@ The `result` field in the log is one of:
 | `stopped` | Elytra stopped |
 | `would_stop` | dry run (`-DryRun`), nothing stopped |
 | `no_service` | Elytra not installed |
+| `accepted` | an admin ran `-AcceptElytraChanges` |
 | `error` | something failed, see `message` |
 
 A `warn` line means the WARDOGS install folder wasn't found. The guard then
@@ -128,18 +164,21 @@ sum(count_over_time({job="elytraguard", level=~"warn|error"} [10m]))
 
 ## Tests
 
-Neither needs admin rights; both run under Windows PowerShell 5.1 and
+None needs admin rights; all run under Windows PowerShell 5.1 and
 PowerShell 7.
 
 - `tests\status.tests.ps1` checks the status output against sample logs.
 - `tests\guard.tests.ps1` runs the guard with `-DryRun` against real
-  services and a stand-in game process, so nothing is ever stopped.
+  services and a stand-in game process, so nothing is ever stopped. It
+  refuses to run while WARDOGS is open.
+- `tests\footprint.tests.ps1` checks which changes to Elytra's setup count
+  as an update and which as a warning.
 
 ## Uninstall
 
 ```powershell
 .\uninstall.ps1               # keeps the log
-.\uninstall.ps1 -RemoveLogs
+.\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup
 ```
 
 ## License

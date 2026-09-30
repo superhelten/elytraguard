@@ -43,6 +43,15 @@
 
 .PARAMETER HeartbeatMinutes
     While waiting for the game to close, log a line this often.
+
+.PARAMETER BaselinePath
+    The record of how Elytra is set up: its service settings, its program
+    files and anything else it installed. Each run compares against it; see
+    README, "Watching Elytra for changes".
+
+.PARAMETER AcceptElytraChanges
+    Record Elytra's current setup as the new baseline, then exit. Run this as
+    admin after checking a change the guard warned about.
 #>
 [CmdletBinding()]
 param(
@@ -51,7 +60,9 @@ param(
     [switch]$DryRun,
     [string]$ServiceName = 'Elytra.Service',
     [int]$SettleSeconds = 45,
-    [double]$HeartbeatMinutes = 5
+    [double]$HeartbeatMinutes = 5,
+    [string]$BaselinePath = (Join-Path $env:ProgramData 'ElytraGuard\elytra-baseline.json'),
+    [switch]$AcceptElytraChanges
 )
 
 $ErrorActionPreference = 'Stop'
@@ -119,6 +130,208 @@ function Get-ElytraService {
     $svc
 }
 
+function Add-Message {
+    param([hashtable]$Entry, [string]$Text)
+    # StrictMode throws on $Entry.message while the key is missing.
+    if ($Entry.ContainsKey('message')) { $Entry['message'] += "; $Text" } else { $Entry['message'] = $Text }
+}
+
+# A property of a baseline read from JSON, or $null. StrictMode throws on a
+# missing property, and an older baseline may lack a newer field.
+function Get-Field {
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $p = $Object.PSObject.Properties[$Name]
+    if ($p) { $p.Value } else { $null }
+}
+
+function Get-List {
+    param($Object, [string]$Name)
+    @(Get-Field $Object $Name | Where-Object { $null -ne $_ })
+}
+
+# Who signed a file, or '' unless the signature is valid: a tampered file
+# still carries its certificate but fails the check.
+function Get-Signer {
+    param([string]$Path)
+    $sig = Get-AuthenticodeSignature -FilePath $Path
+    if ($sig.Status -ne 'Valid') { return '' }
+    $sig.SignerCertificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+}
+
+function Get-BinaryPath {
+    param([string]$PathName)
+    if ($PathName -match '^"([^"]+)"') { return $Matches[1] }
+    if ($PathName -match '^(.+?\.(exe|sys))(\s|$)') { return $Matches[1] }
+    $PathName
+}
+
+# Elytra's setup as it is now. Files whose hash is in $Previous keep their
+# recorded signer, so only new or changed files are checked for signatures.
+function Get-ElytraFootprint {
+    param($Service, $Previous)
+    $bin = Get-BinaryPath $Service.PathName
+    $dir = Split-Path $bin
+    $prefix = $dir.TrimEnd('\') + '\'
+    $inWindows = $prefix.StartsWith($env:SystemRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        $prefix.Length -le 3
+
+    $sd = & sc.exe sdshow $Service.Name
+    $dacl = if ($LASTEXITCODE -eq 0) { (@($sd) | Where-Object { "$_".Trim() }) -join '' } else { '' }
+    $recovery = ''
+    $depends = ''
+    $reg = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$($Service.Name)" -ErrorAction SilentlyContinue
+    if (Get-Field $reg 'FailureActions') { $recovery = [Convert]::ToBase64String($reg.FailureActions) }
+    if (Get-Field $reg 'DependOnService') { $depends = @($reg.DependOnService) -join ',' }
+
+    # Program files only. Content\ holds data packages that change all the time.
+    $known = @{}
+    foreach ($f in Get-List $Previous 'files') { $known[$f.sha256] = $f.signer }
+    $files = @()
+    if (-not $inWindows -and (Test-Path $dir)) {
+        $files = @(Get-ChildItem $dir -Recurse -File -Include *.exe, *.dll, *.sys -ErrorAction SilentlyContinue |
+            Where-Object { -not $_.FullName.StartsWith("$($prefix)Content\", [StringComparison]::OrdinalIgnoreCase) } |
+            Sort-Object FullName | ForEach-Object {
+                $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
+                $signer = if ($known.ContainsKey($hash)) { $known[$hash] } else { Get-Signer $_.FullName }
+                [pscustomobject]@{ path = $_.FullName.Substring($prefix.Length); sha256 = $hash; signer = $signer }
+            })
+    }
+
+    # Other services, drivers and scheduled tasks that belong to Elytra, going
+    # by name or by where their program lives.
+    $isElytra = {
+        param([string]$Name, [string]$Path)
+        ("$Name $Path" -match 'elytra|vaiiya' -and $Name -ne 'ElytraGuard') -or
+        (-not $inWindows -and $Path -and $Path.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    }
+    $related = @()
+    foreach ($s in Get-CimInstance Win32_Service) {
+        if ($s.Name -ne $Service.Name -and (& $isElytra "$($s.Name) $($s.DisplayName)" $s.PathName)) { $related += "service:$($s.Name)" }
+    }
+    foreach ($d in Get-CimInstance Win32_SystemDriver) {
+        if (& $isElytra "$($d.Name) $($d.DisplayName)" $d.PathName) { $related += "driver:$($d.Name)" }
+    }
+    foreach ($t in Get-ScheduledTask -ErrorAction SilentlyContinue) {
+        $exec = @($t.Actions | ForEach-Object { Get-Field $_ 'Execute' }) -join ' '
+        if (& $isElytra $t.TaskName $exec) { $related += "task:$($t.TaskPath)$($t.TaskName)" }
+    }
+
+    [pscustomobject]@{
+        service        = [pscustomobject]@{
+            name = $Service.Name; path = $bin; start_mode = $Service.StartMode; account = $Service.StartName
+            type = $Service.ServiceType; dacl = $dacl; recovery = $recovery; depends = $depends
+        }
+        dir            = $dir
+        dir_in_windows = $inWindows
+        files          = $files
+        related        = @($related | Sort-Object)
+    }
+}
+
+# What differs between two footprints. 'warn' for anything that changes what
+# Elytra can do or who signed it; 'info' for an ordinary update.
+function Compare-ElytraFootprint {
+    param($Old, $New)
+    $changes = @()
+    $labels = [ordered]@{
+        name = 'service name'; path = 'service program'; start_mode = 'start type'; account = 'service account'
+        type = 'service type'; depends = 'service dependencies'; dacl = 'service permissions'; recovery = 'service recovery actions'
+    }
+    $oldSvc = Get-Field $Old 'service'
+    $newSvc = Get-Field $New 'service'
+    foreach ($field in $labels.Keys) {
+        $a = "$(Get-Field $oldSvc $field)"
+        $b = "$(Get-Field $newSvc $field)"
+        if ($a -eq $b) { continue }
+        # Permissions and recovery actions are long encoded strings; say that they changed, not how.
+        $text = if ($field -in 'dacl', 'recovery') { "$($labels[$field]) changed" } else { "$($labels[$field]) '$a' -> '$b'" }
+        $changes += @{ severity = 'warn'; text = $text }
+    }
+    if ((Get-Field $New 'dir_in_windows') -and -not (Get-Field $Old 'dir_in_windows')) {
+        $changes += @{ severity = 'warn'; text = "service program moved into the Windows folder" }
+    }
+
+    $signers = @{}
+    $oldFiles = @{}
+    foreach ($f in Get-List $Old 'files') {
+        $oldFiles[$f.path] = $f
+        if ($f.signer) { $signers[$f.signer] = $true }
+    }
+    $newPaths = @{}
+    foreach ($f in Get-List $New 'files') {
+        $newPaths[$f.path] = $true
+        $o = $oldFiles[$f.path]
+        if ($o -and $o.sha256 -eq $f.sha256) { continue }
+        $what = if ($o) { 'changed' } else { 'added' }
+        $changes += if ($f.path -like '*.sys') { @{ severity = 'warn'; text = "driver file $($f.path) $what" } }
+        elseif (-not $f.signer) { @{ severity = 'warn'; text = "$($f.path) $what, not signed" } }
+        elseif (-not $signers.ContainsKey($f.signer)) { @{ severity = 'warn'; text = "$($f.path) $what, signed by '$($f.signer)'" } }
+        else { @{ severity = 'info'; text = "$($f.path) $what ($("$($f.sha256)" -replace '^(.{8}).+', '$1'))" } }
+    }
+    foreach ($p in $oldFiles.Keys) {
+        if (-not $newPaths.ContainsKey($p)) { $changes += @{ severity = 'info'; text = "$p removed" } }
+    }
+
+    $oldRelated = Get-List $Old 'related'
+    $newRelated = Get-List $New 'related'
+    foreach ($r in $newRelated) { if ($r -notin $oldRelated) { $changes += @{ severity = 'warn'; text = "new $r" } } }
+    foreach ($r in $oldRelated) { if ($r -notin $newRelated) { $changes += @{ severity = 'info'; text = "$r removed" } } }
+    $changes
+}
+
+function Save-Baseline {
+    param($Footprint)
+    New-Item -ItemType Directory -Path (Split-Path $BaselinePath) -Force | Out-Null
+    $tmp = "$BaselinePath.tmp"
+    $Footprint | ConvertTo-Json -Depth 5 | Set-Content -Path $tmp -Encoding UTF8
+    Move-Item $tmp $BaselinePath -Force
+}
+
+# Compares Elytra's setup with the baseline and notes the outcome in $Entry.
+# Ordinary updates move the baseline along; anything else is logged as a
+# warning on every run until an admin accepts it with -AcceptElytraChanges.
+function Update-Footprint {
+    param([hashtable]$Entry, $Service)
+    $old = $null
+    if (Test-Path $BaselinePath) {
+        # Accepting replaces the baseline, so a damaged one mustn't block it.
+        try { $old = Get-Content $BaselinePath -Raw | ConvertFrom-Json }
+        catch { if (-not $AcceptElytraChanges) { throw } }
+    }
+    if (-not $Service) {
+        $dir = Get-Field $old 'dir'
+        if ($dir -and (Test-Path $dir)) {
+            $Entry.footprint = 'changed'
+            $Entry.level = 'warn'
+            Add-Message $Entry 'Elytra changed: its service is gone but its folder is still there'
+        }
+        return
+    }
+
+    $new = Get-ElytraFootprint $Service $old
+    if (-not $old -or $AcceptElytraChanges) {
+        Save-Baseline $new
+        $Entry.footprint = if ($old) { 'accepted' } else { 'recorded' }
+        return
+    }
+    $changes = @(Compare-ElytraFootprint $old $new)
+    $warn = @($changes | Where-Object { $_.severity -eq 'warn' } | ForEach-Object { $_.text })
+    if ($warn) {
+        $Entry.footprint = 'changed'
+        $Entry.level = 'warn'
+        Add-Message $Entry ('Elytra changed: ' + ($warn -join '; '))
+    }
+    elseif ($changes) {
+        Save-Baseline $new
+        $Entry.footprint = 'updated'
+        Add-Message $Entry ('Elytra updated: ' + (@($changes | ForEach-Object { $_.text }) -join '; '))
+    }
+    else {
+        $Entry.footprint = 'same'
+    }
+}
+
 function Get-GameProcess {
     param($Processes, [string]$GameDir)
     $prefix = if ($GameDir) { $GameDir.TrimEnd('\') + '\' } else { $null }
@@ -166,9 +379,21 @@ function Wait-GameExit {
 function Invoke-Guard {
     param([hashtable]$Entry, [bool]$GameWasOpen = $false)
     $svc = Get-ElytraService
+    # Watching for changes comes second to stopping Elytra, so its failure
+    # is a warning and the run carries on.
+    try { Update-Footprint $Entry $svc }
+    catch {
+        $Entry.footprint = 'error'
+        $Entry.level = 'warn'
+        Add-Message $Entry "Checking Elytra for changes failed: $($_.Exception.Message)"
+    }
     if (-not $svc) { return 'no_service' }
     $Entry.service = $svc.Name
     $Entry.service_state = $svc.State
+    if ($AcceptElytraChanges) {
+        Write-Host "Recorded Elytra's current setup as the baseline: $BaselinePath"
+        return 'accepted'
+    }
     if ($svc.State -ne 'Running') { return 'idle' }
 
     $gameDir = Get-WardogsDir
@@ -176,7 +401,7 @@ function Invoke-Guard {
     if (-not $gameDir) {
         # Still safe thanks to the known process names, but detection is weaker.
         $Entry.level = 'warn'
-        $Entry.message = 'WARDOGS install folder not found; using known process names only'
+        Add-Message $Entry 'WARDOGS install folder not found; using known process names only'
     }
     $procs = @(Get-CimInstance Win32_Process)
     $Entry.game_running = [bool](Get-GameProcess $procs $gameDir)
@@ -206,6 +431,9 @@ function Invoke-Guard {
     $Entry.service_state = 'Stopped'
     'stopped'
 }
+
+# Dot-sourced (by the tests): define the functions, run nothing.
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 $entry = @{ level = 'info' }
 try {

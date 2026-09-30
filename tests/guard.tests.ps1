@@ -21,6 +21,7 @@ New-Item -ItemType Directory -Force $work | Out-Null
 $fakeGame = Join-Path $work 'WardogsLauncher-Shipping.exe'
 Copy-Item (Join-Path $env:SystemRoot 'System32\PING.EXE') $fakeGame
 $marker = Join-Path $work 'second-game-exited.txt'
+$baseline = Join-Path $work 'elytra-baseline.json'
 
 # EventLog always runs and has been up for longer than a minute.
 $running = 'EventLog'
@@ -54,6 +55,24 @@ $cases = @(
         args = $closed + @('-SettleSeconds', 5); game = 6; next = @{ after = 7; pings = 5 }
         first = 'game_running'; want = 'would_stop'
     }
+    @{
+        # Accepting must not wait for an open game; it records and exits.
+        name = 'accepting changes records and exits'
+        args = $closed + @('-AcceptElytraChanges'); game = 60; maxSeconds = 20
+        want = 'accepted'; footprint = 'recorded'
+    }
+    @{ name = 'Elytra unchanged';  args = $closed; seed = @{}; want = 'would_stop'; footprint = 'same'; level = 'info' }
+    @{
+        # A change is a warning, but the guard still does its job.
+        name = 'Elytra changed'
+        args = $closed; seed = @{ start_mode = 'Disabled' }
+        want = 'would_stop'; footprint = 'changed'; level = 'warn'; message = "start type 'Disabled' -> "
+    }
+    @{
+        name = 'a broken baseline does not stop the guard'
+        args = $closed; corrupt = $true
+        want = 'would_stop'; footprint = 'error'; level = 'warn'; message = 'Checking Elytra for changes failed'
+    }
 )
 # With no service of that name the guard looks for one in an Elytra folder,
 # so this case only holds on a machine without Elytra.
@@ -66,7 +85,16 @@ $failed = 0
 foreach ($exe in $hosts) {
     foreach ($case in $cases) {
         $log = Join-Path $work 'elytraguard.log'
-        Remove-Item $log, $marker -ErrorAction SilentlyContinue
+        Remove-Item $log, $marker, $baseline -ErrorAction SilentlyContinue
+        if ($case.seed) {
+            # Record a baseline, then edit it to stand for Elytra's earlier setup.
+            & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline @($case.args) -AcceptElytraChanges | Out-Null
+            $b = Get-Content $baseline -Raw | ConvertFrom-Json
+            foreach ($k in $case.seed.Keys) { $b.service.$k = $case.seed[$k] }
+            $b | ConvertTo-Json -Depth 5 | Set-Content $baseline -Encoding UTF8
+            Remove-Item $log
+        }
+        if ($case.corrupt) { Set-Content $baseline '{ not json' }
         $started = @()
         if ($case.game) {
             $started += Start-Process $fakeGame -ArgumentList '-n', $case.game, '127.0.0.1' -WindowStyle Hidden -PassThru
@@ -77,8 +105,10 @@ foreach ($exe in $hosts) {
             $started += Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', $cmd -WindowStyle Hidden -PassThru
         }
         try {
-            $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log @($case.args) 2>&1 | Out-String
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            $out = & $exe -NoProfile -ExecutionPolicy Bypass -File $guard -DryRun -LogPath $log -BaselinePath $baseline @($case.args) 2>&1 | Out-String
             $code = $LASTEXITCODE
+            $took = $clock.Elapsed.TotalSeconds
         }
         finally {
             foreach ($p in $started) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
@@ -99,6 +129,11 @@ foreach ($exe in $hosts) {
             if ($last.result -in 'grace', 'would_stop' -and $null -eq $last.uptime_min) { $why += 'no uptime_min' }
             if ($case.first -and $lines[0].result -ne $case.first) { $why += "first result '$($lines[0].result)', expected '$($case.first)'" }
             if ($case.first -and $last.game_running -ne $false) { $why += 'last line does not say the game is closed' }
+            foreach ($field in 'footprint', 'level') {
+                if ($case.$field -and $last.$field -ne $case.$field) { $why += "$field '$($last.$field)', expected '$($case.$field)'" }
+            }
+            if ($case.message -and -not "$($last.message)".Contains($case.message)) { $why += "message '$($last.message)'" }
+            if ($case.maxSeconds -and $took -gt $case.maxSeconds) { $why += "took $([int]$took) s" }
             $beats = @($lines | Where-Object { $_.result -eq 'game_running' }).Count
             if ($case.beats -and $beats -lt $case.beats) { $why += "$beats game_running lines, expected at least $($case.beats)" }
             if ($case.next) {

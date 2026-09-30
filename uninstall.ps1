@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
     Removes ElytraGuard: the scheduled task and the Program Files folder.
-    Elytra itself is not touched. Logs are kept unless -RemoveLogs is given.
+    Elytra itself is not touched. Logs and the record of Elytra's setup are
+    kept unless -RemoveLogs is given.
 #>
 #Requires -RunAsAdministrator
 [CmdletBinding()]
