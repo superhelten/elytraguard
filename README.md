@@ -35,7 +35,8 @@ usual.
    client.
 3. If the service started less than 10 minutes ago, or its start time can't
    be read, leave it alone. A game that is still starting up is never cut
-   off.
+   off. This step is skipped after waiting for the game, since the game has
+   then clearly come and gone.
 4. Otherwise, stop the service.
 
 Every run appends one JSON line to

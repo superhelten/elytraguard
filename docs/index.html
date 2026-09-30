@@ -186,7 +186,7 @@
       <ol class="rules">
         <li><h3>Is Elytra running?</h3><p>If it isn't, nothing to do.</p></li>
         <li><h3>Is the game running?</h3><p>If any process from the WARDOGS install folder is running, Elytra is left alone. ElytraGuard finds that folder through your Steam libraries, so this still works if a game update renames its executables. The check then waits for the game to close and carries on about a minute after you quit, instead of at the next run.</p></li>
-        <li><h3>Did Elytra just start?</h3><p>If the service started less than 10 minutes ago, it is left alone, so a game that is still loading is never cut off.</p></li>
+        <li><h3>Did Elytra just start?</h3><p>If the service started less than 10 minutes ago, it is left alone, so a game that is still loading is never cut off. After waiting for the game to close, this check is skipped.</p></li>
         <li><h3>Otherwise, stop it.</h3><p>It uses the standard Windows service stop, the same thing the Services app does. The next time you launch WARDOGS, the game starts Elytra again as usual.</p></li>
       </ol>
       <p style="margin-top:20px">Every run writes one line to <code>C:\ProgramData\ElytraGuard\elytraguard.log</code>, and one every 5 minutes while it waits for the game, so you can always see what it did and why.</p>

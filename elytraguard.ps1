@@ -20,7 +20,8 @@
       - never stop the service while any process from the game folder, or a
         known game process name, is running;
       - leave a freshly started service alone for GraceMinutes, so a game that
-        is still starting up is not cut off;
+        is still starting up is not cut off, unless this run has just seen
+        the game open and close;
       - if the service start time can't be read, treat it as fresh.
 
 .PARAMETER GraceMinutes
@@ -163,7 +164,7 @@ function Wait-GameExit {
 # Decides what to do, stops the service if it should, and returns the result.
 # Everything else worth logging goes into $Entry.
 function Invoke-Guard {
-    param([hashtable]$Entry)
+    param([hashtable]$Entry, [bool]$GameWasOpen = $false)
     $svc = Get-ElytraService
     if (-not $svc) { return 'no_service' }
     $Entry.service = $svc.Name
@@ -186,7 +187,7 @@ function Invoke-Guard {
         Wait-GameExit $Entry $gameDir
         $Entry.Clear()
         $Entry.level = 'info'
-        return Invoke-Guard $Entry
+        return Invoke-Guard $Entry $true
     }
 
     # CreationDate is readable without admin rights, unlike Process.StartTime.
@@ -194,7 +195,8 @@ function Invoke-Guard {
     if (-not ($svcProc -and $svcProc.CreationDate)) { return 'grace' }
     $uptime = ((Get-Date) - $svcProc.CreationDate).TotalMinutes
     $Entry.uptime_min = [math]::Round($uptime, 1)
-    if ($uptime -lt $GraceMinutes) { return 'grace' }
+    # Grace covers a game that hasn't shown up yet; not needed once it has.
+    if ($uptime -lt $GraceMinutes -and -not $GameWasOpen) { return 'grace' }
     if ($DryRun) { return 'would_stop' }
 
     # Stop-Service waits forever; a hung stop would hit the task's time limit
