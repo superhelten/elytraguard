@@ -43,6 +43,13 @@ $cases = @(
         not  = @('service=', 'game_running', 'NOT OK', "'Stopped'")
     }
     @{
+        # The guard logs how long after the game closed it stopped Elytra.
+        name = 'stopped after the game closed'
+        log  = @((Line 10 game_running $playing), (Line 5 stopped ($stopped + @{ after_game_s = 47 })), (Line 0.5 idle $idle))
+        exit = 0
+        want = @('WARDOGS closed, Elytra stopped by ElytraGuard 47 s later')
+    }
+    @{
         name = 'Elytra lingers'
         log  = @((Line 16 grace $waiting), (Line 11 grace $waiting), (Line 6 grace $waiting), (Line 1 grace $waiting))
         exit = 1

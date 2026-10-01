@@ -88,7 +88,7 @@ ElytraGuard: OK
 
 What happened:
   13:41-14:31  WARDOGS open, Elytra left running (11 checks)
-  14:36        WARDOGS closed, Elytra stopped by ElytraGuard
+  14:36        WARDOGS closed, Elytra stopped by ElytraGuard 47 s later
   14:41-14:46  Nothing to do, Elytra already stopped (2 checks)
 
 Scheduled task details need an admin prompt; that is normal.
@@ -237,6 +237,10 @@ The `result` field of each log line is one of:
 | `no_service` | Elytra not installed |
 | `accepted` | an admin ran `-AcceptElytraChanges` |
 | `error` | something failed, see `message` |
+
+A `stopped` line after a match also has `after_game_s`: how many seconds
+after the game closed Elytra was stopped. It is usually about 46, the 45
+seconds of waiting plus the stop itself.
 
 The `footprint` field is `recorded`, `same`, `updated`, `changed`,
 `unverified`, `accepted` or `error`. A line with `"level": "warn"` has a

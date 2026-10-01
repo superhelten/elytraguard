@@ -15,7 +15,12 @@ param(
 function Get-Description($entry) {
     $text = switch ($entry.result) {
         'game_running' { 'WARDOGS open, Elytra left running' }
-        'stopped'      { 'WARDOGS closed, Elytra stopped by ElytraGuard' }
+        'stopped'      {
+            $text = 'WARDOGS closed, Elytra stopped by ElytraGuard'
+            # Logged since 1.2.3 when the guard saw the game close.
+            if ($entry.PSObject.Properties['after_game_s']) { $text += " $($entry.after_game_s) s later" }
+            $text
+        }
         'idle'         { 'Nothing to do, Elytra already stopped' }
         'grace'        { 'Elytra started recently, waiting' }
         'would_stop'   { 'Dry run: would have stopped Elytra' }

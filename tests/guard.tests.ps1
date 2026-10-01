@@ -35,11 +35,11 @@ $quick = $closed + @('-SettleSeconds', 1)
 $cases = @(
     @{ name = 'service stopped';  args = @('-ServiceName', $stopped); want = 'idle' }
     @{ name = 'started recently'; args = @('-ServiceName', $running, '-GraceMinutes', 100000); want = 'grace' }
-    @{ name = 'game closed';      args = $closed; want = 'would_stop' }
+    @{ name = 'game closed';      args = $closed; want = 'would_stop'; afterGame = $false }
     @{
         name = 'waits for the game to close'
         args = $quick; game = 5
-        first = 'game_running'; want = 'would_stop'
+        first = 'game_running'; want = 'would_stop'; afterGame = $true
     }
     @{
         # A short session: the game has come and gone, so no grace is needed.
@@ -163,6 +163,10 @@ foreach ($exe in $hosts) {
                 if ($case.$field -and $last.$field -ne $case.$field) { $why += "$field '$($last.$field)', expected '$($case.$field)'" }
             }
             if ($case.message -and -not "$($last.message)".Contains($case.message)) { $why += "message '$($last.message)'" }
+            # Seconds from the game closing to the decision: at least the settle time.
+            $after = if ($last.PSObject.Properties['after_game_s']) { $last.after_game_s }
+            if ($case.afterGame -eq $true -and -not ($after -ge 1 -and $after -lt 30)) { $why += "after_game_s '$after'" }
+            if ($case.afterGame -eq $false -and $null -ne $after) { $why += "after_game_s '$after' without a game" }
             if ($case.noBaselineAfter -and (Test-Path $baseline)) { $why += 'a new baseline was recorded' }
             if ($case.maxSeconds -and $took -gt $case.maxSeconds) { $why += "took $([int]$took) s" }
             $beats = @($lines | Where-Object { $_.result -eq 'game_running' }).Count

@@ -85,7 +85,7 @@ function Write-GuardLog {
         try { Move-Item $LogPath "$LogPath.1" -Force } catch { }
     }
     $Entry['time'] = (Get-Date).ToUniversalTime().ToString('o')
-    $Entry['version'] = '1.2.2'
+    $Entry['version'] = '1.2.3'
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Entry | ConvertTo-Json -Compress) + "`r`n")
     # Share read/write/delete: Add-Content fails while a log shipper (e.g. a
     # Docker bind mount) has the file open.
@@ -430,8 +430,9 @@ function Wait-ProcessExit {
     }
 }
 
-# Blocks until no game process has run for SettleSeconds. The task skips its
-# own runs while this one lasts, so log $Entry every HeartbeatMinutes instead.
+# Blocks until no game process has run for SettleSeconds and returns when the
+# last one exited. The task skips its own runs while this one lasts, so log
+# $Entry every HeartbeatMinutes instead.
 function Wait-GameExit {
     param([hashtable]$Entry, [string]$GameDir)
     $beat = (Get-Date).AddMinutes($HeartbeatMinutes)
@@ -442,14 +443,22 @@ function Wait-GameExit {
                 $beat = (Get-Date).AddMinutes($HeartbeatMinutes)
             }
         }
+        $closed = Get-Date
         Start-Sleep -Seconds $SettleSeconds
     } while (Get-GameProcess (Get-CimInstance Win32_Process) $GameDir)
+    $closed
+}
+
+# How many seconds after the game closed Elytra was stopped, for the log.
+function Set-AfterGame {
+    param([hashtable]$Entry, $ClosedAt)
+    if ($ClosedAt) { $Entry.after_game_s = [int]((Get-Date) - $ClosedAt).TotalSeconds }
 }
 
 # Decides what to do, stops the service if it should, and returns the result.
 # Everything else worth logging goes into $Entry.
 function Invoke-Guard {
-    param([hashtable]$Entry, [bool]$GameWasOpen = $false)
+    param([hashtable]$Entry, [bool]$GameWasOpen = $false, $GameClosedAt = $null)
     $svc = Get-ElytraService
     # Watching for changes comes second to stopping Elytra, so its failure
     # is a warning and the run carries on.
@@ -486,10 +495,10 @@ function Invoke-Guard {
         # Stay until the game closes, then decide again from scratch.
         $Entry.result = 'game_running'
         Write-GuardLog $Entry
-        Wait-GameExit $Entry $gameDir
+        $closedAt = Wait-GameExit $Entry $gameDir
         $Entry.Clear()
         $Entry.level = 'info'
-        return Invoke-Guard $Entry $true
+        return Invoke-Guard $Entry $true $closedAt
     }
 
     # CreationDate is readable without admin rights, unlike Process.StartTime.
@@ -499,13 +508,14 @@ function Invoke-Guard {
     $Entry.uptime_min = [math]::Round($uptime, 1)
     # Grace covers a game that hasn't shown up yet; not needed once it has.
     if ($uptime -lt $GraceMinutes -and -not $GameWasOpen) { return 'grace' }
-    if ($DryRun) { return 'would_stop' }
+    if ($DryRun) { Set-AfterGame $Entry $GameClosedAt; return 'would_stop' }
 
     # Stop-Service waits forever; a hung stop would hit the task's time limit
     # and leave no log line. Time out here instead, so it is logged as an error.
     Stop-Service -Name $svc.Name -Force -NoWait
     (Get-Service -Name $svc.Name).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
     $Entry.service_state = 'Stopped'
+    Set-AfterGame $Entry $GameClosedAt
     'stopped'
 }
 
