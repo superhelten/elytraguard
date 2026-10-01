@@ -13,7 +13,7 @@
     can be noticed (see README).
 
     A run that finds the game open stays until the game closes, then stops
-    Elytra within about a minute instead of at the next scheduled run. While
+    Elytra in under a minute instead of at the next scheduled run. While
     it waits it logs a line every HeartbeatMinutes, as the task would.
 
     Safety rules, in order:

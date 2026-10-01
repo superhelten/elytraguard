@@ -10,7 +10,7 @@ service when it launches, but the service can keep running after the game
 has closed. ElytraGuard stops it again once the game is gone, so the
 anti-cheat only runs while you play.
 
-![WARDOGS runs from start to quit. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped about a minute later.](docs/img/timeline.svg)
+![WARDOGS runs from start to quit. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped less than a minute later.](docs/img/timeline.svg)
 
 It does **not** block, modify or uninstall Elytra, and it never touches game
 files. The next time you start WARDOGS, the game starts the service again as
@@ -25,7 +25,7 @@ usual.
 1. Download `elytraguard-setup.exe` from the
    [latest release](https://github.com/superhelten/elytraguard/releases/latest).
 2. Run it and accept the admin prompt.
-3. Play as usual. About a minute after you quit WARDOGS, Elytra is stopped.
+3. Play as usual. Less than a minute after you quit WARDOGS, Elytra is stopped.
 
 You need Windows 10 or 11 and an administrator account. Nothing else: it
 uses the PowerShell that ships with Windows.
@@ -156,7 +156,8 @@ recognized. Changes to Elytra itself are watched too; see
 
    The run then waits for the game to close, without using any CPU. Once the
    game has been closed for 45 seconds, it carries on with the steps below,
-   so Elytra stops about a minute after you quit instead of at the next run.
+   so Elytra stops less than a minute after you quit (about 45 seconds)
+   instead of at the next run.
    The 45 seconds cover the switch from launcher to game client.
 3. If the service started less than 10 minutes ago, or its start time can't
    be read, leave it alone, so a game that is still starting up is never cut

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 250" width="800" height="250" role="img" aria-labelledby="t d">
   <title id="t">When Elytra runs, with and without ElytraGuard</title>
-  <desc id="d">The game starts Elytra when you launch WARDOGS. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped about a minute after you quit.</desc>
+  <desc id="d">The game starts Elytra when you launch WARDOGS. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped less than a minute after you quit.</desc>
   <style>
     .bg { fill: #ffffff; }
     .txt { fill: #1f2328; font: 15px system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -44,5 +44,5 @@
   <!-- Labels -->
   <text class="txt" x="250" y="222" text-anchor="middle">You start the game</text>
   <text class="txt" x="512" y="222" text-anchor="end">You quit</text>
-  <text class="txt" x="598" y="222">Stopped about 1 min later</text>
+  <text class="txt" x="598" y="222">Stopped within a minute</text>
 </svg>
