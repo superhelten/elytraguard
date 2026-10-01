@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 250" width="800" height="250" role="img" aria-labelledby="t d">
+  <title id="t">When Elytra runs, with and without ElytraGuard</title>
+  <desc id="d">The game starts Elytra when you launch WARDOGS. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped about a minute after you quit.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .txt { fill: #1f2328; font: 15px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .muted { fill: #59636e; font: 13px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .strong { font-weight: 600; }
+    .game { fill: #8c959f; }
+    .bad { fill: #cf222e; }
+    .good { fill: #1a7f37; }
+    .tick { stroke: #8c959f; stroke-width: 1; stroke-dasharray: 3 4; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .txt { fill: #e6edf3; }
+      .muted { fill: #9198a1; }
+      .game { fill: #6e7681; }
+      .bad { fill: #f85149; }
+      .good { fill: #3fb950; }
+      .tick { stroke: #6e7681; }
+    }
+  </style>
+  <rect class="bg" width="800" height="250" rx="8"/>
+
+  <!-- Moments -->
+  <line class="tick" x1="250" y1="24" x2="250" y2="196"/>
+  <line class="tick" x1="520" y1="24" x2="520" y2="196"/>
+  <line class="tick" x1="590" y1="24" x2="590" y2="196"/>
+
+  <!-- Rows -->
+  <text class="txt strong" x="24" y="56">WARDOGS</text>
+  <rect class="game" x="250" y="40" width="270" height="22" rx="4"/>
+
+  <text class="txt strong" x="24" y="106">Elytra</text>
+  <text class="muted" x="24" y="124">without ElytraGuard</text>
+  <rect class="bad" x="250" y="96" width="480" height="22" rx="4"/>
+  <path class="bad" d="M736 96 l18 11 l-18 11 z"/>
+  <text class="muted" x="760" y="88" text-anchor="end">keeps running</text>
+
+  <text class="txt strong" x="24" y="162">Elytra</text>
+  <text class="muted" x="24" y="180">with ElytraGuard</text>
+  <rect class="good" x="250" y="152" width="340" height="22" rx="4"/>
+
+  <!-- Labels -->
+  <text class="txt" x="250" y="222" text-anchor="middle">You start the game</text>
+  <text class="txt" x="512" y="222" text-anchor="end">You quit</text>
+  <text class="txt" x="598" y="222">Stopped about 1 min later</text>
+</svg>

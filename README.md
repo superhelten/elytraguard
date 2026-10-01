@@ -1,13 +1,16 @@
 # ElytraGuard
 
 Stops the **Elytra anti-cheat** service when **WARDOGS** is not running.
+Website: <https://superhelten.github.io/elytraguard/>
 
 In September 2026 WARDOGS replaced Easy Anti-Cheat with Elytra (by VAIIYA).
 Elytra installs a Windows service, `Elytra.Service`, that runs as
-LocalSystem. The game starts the service when it launches, but the service
-can keep running after the game has closed. ElytraGuard is a small scheduled
-task that stops the service again once the game is gone, so the anti-cheat
-only runs while you play.
+LocalSystem, the most privileged account on your PC. The game starts the
+service when it launches, but the service can keep running after the game
+has closed. ElytraGuard stops it again once the game is gone, so the
+anti-cheat only runs while you play.
+
+![WARDOGS runs from start to quit. Without ElytraGuard, Elytra keeps running after you quit. With ElytraGuard, it is stopped about a minute later.](docs/img/timeline.svg)
 
 It does **not** block, modify or uninstall Elytra, and it never touches game
 files. The next time you start WARDOGS, the game starts the service again as
@@ -17,113 +20,57 @@ usual.
 > risk. ElytraGuard only acts while the game is closed, but read the game's
 > terms if you are unsure.
 
-## How it works
+## Quick start
 
-`elytraguard.ps1` runs as SYSTEM at startup and every 5 minutes. On each run:
+1. Download `elytraguard-setup.exe` from the
+   [latest release](https://github.com/superhelten/elytraguard/releases/latest).
+2. Run it and accept the admin prompt.
+3. Play as usual. About a minute after you quit WARDOGS, Elytra is stopped.
 
-1. If Elytra isn't running, do nothing.
-2. If any process from the WARDOGS install folder is running, or a process
-   with a known game name (`WardogsLauncher-Shipping`,
-   `WardogsClient-Win64-Shipping`), leave Elytra alone. The install folder is
-   found through your Steam libraries, so this still works if a game update
-   renames its executables.
-
-   The run then stays and waits for the game to close, without using any
-   CPU. Once the game has been closed for 45 seconds it carries on with the
-   steps below, so Elytra stops about a minute after you quit instead of at
-   the next run. The 45 seconds cover the switch from launcher to game
-   client.
-3. If the service started less than 10 minutes ago, or its start time can't
-   be read, leave it alone. A game that is still starting up is never cut
-   off. This step is skipped after waiting for the game, since the game has
-   then clearly come and gone.
-4. Otherwise, stop the service.
-
-Every run appends one JSON line to
-`C:\ProgramData\ElytraGuard\elytraguard.log`, which rotates at 1 MB. A run
-that is waiting for the game adds a `game_running` line every 5 minutes, just
-as the scheduled runs it stands in for would.
-
-## Watching Elytra for changes
-
-A game update can change what Elytra installs. On its first run the guard
-records how Elytra is set up, and every run after that compares against the
-record:
-
-- the service: program, start type, account, type, dependencies,
-  permissions and recovery actions;
-- the program files (`.exe`, `.dll`, `.sys`) in Elytra's folder, with their
-  SHA-256 hash and signing certificate: its name, thumbprint and chain. A
-  file only counts as signed if Windows finds the signature valid, meaning
-  intact and chained to a root it trusts. The `Content` folder holds data
-  packages that change all the time and is left out;
-- any other service, driver or scheduled task named after Elytra or VAIIYA,
-  or running a program from Elytra's folder.
-
-An ordinary update, where program files change but are validly signed with
-a certificate already in the record, is logged as `"footprint": "updated"`
-and the record moves along. Certificates are matched by thumbprint, not by
-name, so another certificate issued to the same company name is a warning
-too. So is a changed service setting, an unsigned file, any driver file, a
-new related service, driver or task, or Elytra's folder left behind without
-its service.
-The warning appears in the log and in `status.ps1` on every run until you
-have looked at it and accept it. Without admin rights it asks for them
-through the Windows prompt and continues in a new window:
-
-```powershell
-& "$env:ProgramFiles\ElytraGuard\elytraguard.ps1" -AcceptElytraChanges
-```
-
-The record is `C:\ProgramData\ElytraGuard\elytra-baseline.json`. Like the
-log, only SYSTEM and Administrators can change it, so a program running
-without admin rights can't rewrite it to hide a change. Each time the guard
-saves it, it also stores its SHA-256 in the registry, under
-`HKLM\SOFTWARE\ElytraGuard`. A record that has been deleted, edited, or has
-no matching hash is a warning (`"footprint": "unverified"`), never a quiet
-fresh start, until you accept Elytra's current setup as above. The very
-first record trusts Elytra as it is at that moment, so install ElytraGuard
-on a PC you trust. ElytraGuard itself never changes Elytra's settings or
-files; it only watches them.
-
-Not covered: a driver or service with an unrelated name, installed somewhere
-else. The `footprint` field of each log line is `recorded`, `same`,
-`updated`, `changed`, `unverified`, `accepted` or `error`.
+You need Windows 10 or 11 and an administrator account. Nothing else: it
+uses the PowerShell that ships with Windows.
 
 ## Install
 
-Requires Windows 10 or 11 and admin rights. It uses the built-in Windows
-PowerShell 5.1.
+### With the setup program
 
-The easiest way is `elytraguard-setup.exe` from the
-[latest release](https://github.com/superhelten/elytraguard/releases/latest).
-Run it and accept the admin prompt. The setup program isn't code-signed, so
-SmartScreen may say "Windows protected your PC"; choose *More info*, then
-*Run anyway*. Setup only unpacks the scripts and runs the same `install.ps1`
-described below, so both ways end in the same state. It also adds ElytraGuard
-to *Settings > Apps > Installed apps*, where you can uninstall it. It is
-built from `installer\elytraguard.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php)
-6 by `installer\build.ps1`.
-
-To install from the zip instead:
+The setup program isn't code-signed, so SmartScreen may say *Windows
+protected your PC*. Choose **More info**, then **Run anyway**. You can check
+the download against `SHA256SUMS.txt` on the release page:
 
 ```powershell
-# In PowerShell. Without admin rights it asks for them (UAC) and carries on
-# in a new window. Use the folder the zip was extracted to; Windows names a
-# second download "elytraguard (1)".
-cd "$HOME\Downloads\elytraguard"
-powershell -ExecutionPolicy Bypass -File .\install.ps1
-# Options: -IntervalMinutes 5 -GraceMinutes 10
+Get-FileHash "$HOME\Downloads\elytraguard-setup.exe" -Algorithm SHA256
 ```
 
-The installer:
+Setup only unpacks the scripts and runs the same `install.ps1` as the zip
+below, so both ways end in the same state. It also adds ElytraGuard to
+*Settings > Apps > Installed apps*, where you can uninstall it.
+
+<img src="docs/img/setup.png" alt="The ElytraGuard setup program, showing its MIT license" width="480">
+
+### From the zip
+
+If you'd rather read every script before running it, download
+`elytraguard.zip` from the same release, extract it, and run in PowerShell:
+
+```powershell
+cd "$HOME\Downloads\elytraguard"
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Without admin rights it asks for them through the Windows prompt and carries
+on in a new window. If you have downloaded ElytraGuard before, Windows may
+have extracted the new zip to `elytraguard (1)`; use that folder, or you'll
+install the old version. Options: `-IntervalMinutes 5 -GraceMinutes 10`.
+
+Either way, the installer:
 
 - copies the guard and `status.ps1` to `C:\Program Files\ElytraGuard`.
   Normal users can't write there, which matters because the task runs as
-  SYSTEM.
-- creates the log folder. Users can read it, but only SYSTEM and
-  Administrators can write to it.
-- registers the `ElytraGuard` task.
+  SYSTEM;
+- creates the log folder `C:\ProgramData\ElytraGuard`. Users can read it,
+  but only SYSTEM and Administrators can write to it;
+- registers the `ElytraGuard` scheduled task.
 
 ## Is it working?
 
@@ -154,9 +101,130 @@ It shows `NOT OK` and exits with code 1 for:
 - warnings or errors in the log;
 - Elytra still running without the game after several runs.
 
-Run it elevated to see the task details too.
+Run it in an admin PowerShell to see the task details too.
 
-The `result` field in the log is one of:
+## Uninstall
+
+If you used the setup program, uninstall ElytraGuard from *Settings > Apps >
+Installed apps*. It asks whether to delete the log and the record of
+Elytra's setup as well; a silent uninstall keeps them.
+
+Otherwise, from the unzipped folder in PowerShell (it asks for admin rights
+the same way):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # keeps the log
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup
+```
+
+Elytra and WARDOGS are not touched.
+
+## FAQ
+
+**Can this get me banned?** ElytraGuard never acts while the game is
+running. It only stops the service after you have quit, and the game starts
+it again on the next launch. It doesn't modify, block or hide from Elytra.
+It is not affiliated with or approved by the game's makers, though, so there
+is no guarantee.
+
+**Does it send any data anywhere?** No. ElytraGuard makes no network
+connections. When Elytra's program files change, it asks Windows to verify
+their signature, and Windows may then download a missing certificate as it
+does for any signed program.
+
+**Why does it need administrator rights?** Setting up a task that runs as
+SYSTEM takes an administrator. Running as SYSTEM lets the guard see which
+programs run from the game folder, and keep its log and records where normal
+programs can't change them.
+
+**What if WARDOGS or Elytra updates?** The game is found by its install
+folder, not only by process names, so renamed executables are still
+recognized. Changes to Elytra itself are watched too; see
+[Watching Elytra for changes](#watching-elytra-for-changes).
+
+**Linux or Steam Deck?** No. The service it manages is a Windows service.
+
+## How it works
+
+`elytraguard.ps1` runs as SYSTEM at startup and every 5 minutes. On each run:
+
+1. If Elytra isn't running, do nothing.
+2. If any process from the WARDOGS install folder is running, or a process
+   with a known game name (`WardogsLauncher-Shipping`,
+   `WardogsClient-Win64-Shipping`), leave Elytra alone. The install folder is
+   found through your Steam libraries.
+
+   The run then waits for the game to close, without using any CPU. Once the
+   game has been closed for 45 seconds, it carries on with the steps below,
+   so Elytra stops about a minute after you quit instead of at the next run.
+   The 45 seconds cover the switch from launcher to game client.
+3. If the service started less than 10 minutes ago, or its start time can't
+   be read, leave it alone, so a game that is still starting up is never cut
+   off. This step is skipped after waiting for the game, since the game has
+   then clearly come and gone.
+4. Otherwise, stop the service.
+
+Every run appends one JSON line to
+`C:\ProgramData\ElytraGuard\elytraguard.log`, which rotates at 1 MB. A run
+that is waiting for the game adds a `game_running` line every 5 minutes.
+
+## Watching Elytra for changes
+
+A game update can change what Elytra installs, for example by adding a
+driver. ElytraGuard records how Elytra is set up and compares every run
+against that record. Ordinary updates, signed by the same company
+certificate as before, are simply noted. Anything else is a warning in the
+log and in `status.ps1`, on every run, until you have looked at it and
+accept it:
+
+```powershell
+& "$env:ProgramFiles\ElytraGuard\elytraguard.ps1" -AcceptElytraChanges
+```
+
+Without admin rights, this asks for them through the Windows prompt and
+continues in a new window.
+
+<details>
+<summary>What is recorded, and what counts as a warning</summary>
+
+The record covers:
+
+- the service: program, start type, account, type, dependencies,
+  permissions and recovery actions;
+- the program files (`.exe`, `.dll`, `.sys`) in Elytra's folder, with their
+  SHA-256 hash and signing certificate: its name, thumbprint and chain. A
+  file only counts as signed if Windows finds the signature valid, meaning
+  intact and chained to a root it trusts. The `Content` folder holds data
+  packages that change all the time and is left out;
+- any other service, driver or scheduled task named after Elytra or VAIIYA,
+  or running a program from Elytra's folder.
+
+An update where program files change but are validly signed with a
+certificate already in the record is logged as `"footprint": "updated"`, and
+the record moves along. Certificates are matched by thumbprint, not by name,
+so another certificate issued to the same company name is a warning. So is a
+changed service setting, an unsigned file, any driver file, a new related
+service, driver or task, or Elytra's folder left behind without its service.
+
+The record is `C:\ProgramData\ElytraGuard\elytra-baseline.json`. Like the
+log, only SYSTEM and Administrators can change it, so a program running
+without admin rights can't rewrite it to hide a change. Each time the guard
+saves it, it also stores its SHA-256 in the registry under
+`HKLM\SOFTWARE\ElytraGuard`. A record that has been deleted, edited, or has
+no matching hash is a warning (`"footprint": "unverified"`), never a quiet
+fresh start, until you accept Elytra's current setup. The very first record
+trusts Elytra as it is at that moment, so install ElytraGuard on a PC you
+trust. ElytraGuard never changes Elytra's settings or files; it only watches
+them.
+
+Not covered: a driver or service with an unrelated name, installed somewhere
+else.
+
+</details>
+
+## Log reference
+
+The `result` field of each log line is one of:
 
 | result | meaning |
 |---|---|
@@ -169,8 +237,11 @@ The `result` field in the log is one of:
 | `accepted` | an admin ran `-AcceptElytraChanges` |
 | `error` | something failed, see `message` |
 
-A `warn` line means the WARDOGS install folder wasn't found. The guard then
-falls back to the known process names.
+The `footprint` field is `recorded`, `same`, `updated`, `changed`,
+`unverified`, `accepted` or `error`. A line with `"level": "warn"` has a
+`message` saying why: a change to Elytra, or a WARDOGS install folder that
+couldn't be found, in which case the guard falls back to the known process
+names.
 
 ### Push alerts (optional)
 
@@ -188,10 +259,10 @@ sum(count_over_time({job="elytraguard"} | json | service_state="Running" | game_
 sum(count_over_time({job="elytraguard", level=~"warn|error"} [10m]))
 ```
 
-## Tests
+## Development
 
-None needs admin rights; all run under Windows PowerShell 5.1 and
-PowerShell 7.
+The tests need no admin rights and run under Windows PowerShell 5.1 and
+PowerShell 7:
 
 - `tests\status.tests.ps1` checks the status output against sample logs.
 - `tests\guard.tests.ps1` runs the guard with `-DryRun` against real
@@ -200,17 +271,10 @@ PowerShell 7.
 - `tests\footprint.tests.ps1` checks which changes to Elytra's setup count
   as an update and which as a warning.
 
-## Uninstall
-
-If you used the setup program, uninstall ElytraGuard from *Settings > Apps >
-Installed apps*. It asks whether to delete the log and the record of
-Elytra's setup as well; a silent uninstall keeps them. Otherwise, from the
-unzipped folder in PowerShell (it asks for admin rights the same way):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # keeps the log
-powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup and its hash
-```
+The setup program is built from `installer\elytraguard.iss` with
+[Inno Setup](https://jrsoftware.org/isinfo.php) 6. Run
+`installer\build.ps1`; it reads the version from `elytraguard.ps1` and writes
+`dist\elytraguard-setup.exe`.
 
 ## License
 
