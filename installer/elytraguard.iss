@@ -35,7 +35,10 @@ DisableProgramGroupPage=yes
 DisableReadyPage=yes
 LicenseFile=..\LICENSE
 UninstallDisplayName={#AppName}
-UninstallDisplayIcon={sys}\WindowsPowerShell\v1.0\powershell.exe
+UninstallDisplayIcon={app}\elytraguard.ico
+; Made from icon.svg by make-icon.ps1.
+SetupIconFile=elytraguard.ico
+WizardSmallImageFile=wizard-small.bmp
 OutputDir=..\dist
 OutputBaseFilename=elytraguard-setup
 Compression=lzma2
@@ -51,6 +54,7 @@ Source: "..\status.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 ; Kept for the uninstaller.
 Source: "..\uninstall.ps1"; DestDir: "{app}"
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
+Source: "elytraguard.ico"; DestDir: "{app}"
 
 [Messages]
 FinishedLabel=ElytraGuard is installed. It runs at startup and every 5 minutes, and stops Elytra less than a minute after you quit WARDOGS.%n%nIts first run recorded how Elytra is set up now, as the baseline to compare with. If a game update changes that, the status shows a warning.

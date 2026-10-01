@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- The landing page's shield, filled so it stays readable at 16 px. -->
+  <path d="M12 22.5s8.5-4.2 8.5-10.6V4.8L12 1.6 3.5 4.8v7.1c0 6.4 8.5 10.6 8.5 10.6z" fill="#F59E0B"/>
+  <path d="m8 12.2 2.9 2.9L16.2 9.4" fill="none" stroke="#0B0F1A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

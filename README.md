@@ -300,7 +300,9 @@ PowerShell 7:
 The setup program is built from `installer\elytraguard.iss` with
 [Inno Setup](https://jrsoftware.org/isinfo.php) 6. Run
 `installer\build.ps1`; it reads the version from `elytraguard.ps1` and writes
-`dist\elytraguard-setup.exe`.
+`dist\elytraguard-setup.exe`. The icon is drawn in `installer\icon.svg`;
+`installer\make-icon.ps1` turns it into `elytraguard.ico` and the wizard's
+corner image when it changes.
 
 ## License
 
