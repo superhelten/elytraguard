@@ -243,10 +243,13 @@ The `footprint` field is `recorded`, `same`, `updated`, `changed`,
 couldn't be found, in which case the guard falls back to the known process
 names.
 
-### Push alerts (optional)
+### Push alerts (optional, for Grafana Loki users)
 
-The log is JSON lines, so any log shipper can pick it up. With Loki and
-Grafana, three rules cover the ways the guard can fail silently:
+Skip this unless you already collect logs with Grafana Loki. The lines below
+are not PowerShell commands: they are LogQL queries to paste into Grafana
+alert rules, with the log shipped to Loki under the label
+`job="elytraguard"`. The log is JSON lines, so any log shipper can pick it
+up. Together the three rules cover the ways the guard can fail silently:
 
 ```logql
 # Guard not running (task disabled/deleted): alert when this is < 1, and on "no data"
