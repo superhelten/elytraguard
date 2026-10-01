@@ -68,7 +68,8 @@ too. So is a changed service setting, an unsigned file, any driver file, a
 new related service, driver or task, or Elytra's folder left behind without
 its service.
 The warning appears in the log and in `status.ps1` on every run until you
-have looked at it and accept it in an elevated PowerShell:
+have looked at it and accept it. Without admin rights it asks for them
+through the Windows prompt and continues in a new window:
 
 ```powershell
 & "$env:ProgramFiles\ElytraGuard\elytraguard.ps1" -AcceptElytraChanges

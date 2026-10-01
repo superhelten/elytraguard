@@ -64,6 +64,13 @@ $cases = @(
         args = $closed + @('-AcceptElytraChanges'); game = 60; maxSeconds = 20
         want = 'accepted'; footprint = 'recorded'
     }
+    @{
+        # A baseline that can't be saved (here: a folder in its place, as
+        # good as a missing admin right) must not be reported as recorded.
+        name = 'accepting fails loudly'
+        args = $closed + @('-AcceptElytraChanges'); baselineIsDir = $true
+        want = 'error'; exit = 1; notInOutput = 'Recorded'; inOutput = 'not recorded'
+    }
     @{ name = 'Elytra unchanged';  args = $closed; seed = @{}; want = 'would_stop'; footprint = 'same'; level = 'info' }
     @{
         # A change is a warning, but the guard still does its job.
@@ -99,7 +106,7 @@ $failed = 0
 foreach ($exe in $hosts) {
     foreach ($case in $cases) {
         $log = Join-Path $work 'elytraguard.log'
-        Remove-Item $log, $marker, $baseline -ErrorAction SilentlyContinue
+        Remove-Item $log, $marker, $baseline -Recurse -ErrorAction SilentlyContinue
         Remove-Item $stateKey -Recurse -ErrorAction SilentlyContinue
         New-Item $stateKey -Force | Out-Null
         if ($case.seed) {
@@ -113,6 +120,7 @@ foreach ($exe in $hosts) {
             if ($case.delete) { Remove-Item $baseline }
             Remove-Item $log
         }
+        if ($case.baselineIsDir) { New-Item -ItemType Directory $baseline | Out-Null }
         if ($case.corrupt) { Set-Content $baseline '{ not json'; Set-TestSeal }
         $started = @()
         if ($case.game) {
@@ -140,7 +148,10 @@ foreach ($exe in $hosts) {
         if (Test-Path $log) { $lines = @(Get-Content $log | ConvertFrom-Json) }
 
         $why = @()
-        if ($code -ne 0) { $why += "exit $code" }
+        $wantExit = if ($case.ContainsKey('exit')) { $case.exit } else { 0 }
+        if ($code -ne $wantExit) { $why += "exit $code, expected $wantExit" }
+        if ($case.notInOutput -and $out.Contains($case.notInOutput)) { $why += "output says '$($case.notInOutput)'" }
+        if ($case.inOutput -and -not $out.Contains($case.inOutput)) { $why += "output lacks '$($case.inOutput)'" }
         if (-not $lines) { $why += 'no log line' }
         else {
             $last = $lines[-1]

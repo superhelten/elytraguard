@@ -85,7 +85,7 @@ function Write-GuardLog {
         try { Move-Item $LogPath "$LogPath.1" -Force } catch { }
     }
     $Entry['time'] = (Get-Date).ToUniversalTime().ToString('o')
-    $Entry['version'] = '1.2.1'
+    $Entry['version'] = '1.2.2'
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Entry | ConvertTo-Json -Compress) + "`r`n")
     # Share read/write/delete: Add-Content fails while a log shipper (e.g. a
     # Docker bind mount) has the file open.
@@ -458,6 +458,8 @@ function Invoke-Guard {
         $Entry.footprint = 'error'
         $Entry.level = 'warn'
         Add-Message $Entry "Checking Elytra for changes failed: $($_.Exception.Message)"
+        # When accepting, recording is the whole job: never report it as done.
+        if ($AcceptElytraChanges) { throw "Elytra's setup was not recorded: $($_.Exception.Message)" }
     }
     if (-not $svc) {
         if ($AcceptElytraChanges) { return 'accepted' }
@@ -510,6 +512,31 @@ function Invoke-Guard {
 # Dot-sourced (by the tests): define the functions, run nothing.
 if ($MyInvocation.InvocationName -eq '.') { return }
 
+# Accepting by hand writes where only admins can. Without admin rights, ask
+# for them (the Windows UAC prompt) and run again in a new window that stays
+# open until the result has been read. Tests keep their state in HKCU.
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if ($AcceptElytraChanges -and $StateKey -like 'HKLM:*' -and
+    -not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $argList = foreach ($p in $PSBoundParameters.GetEnumerator()) {
+        if ($p.Value -is [switch]) { if ($p.Value) { "-$($p.Key)" } } else { "-$($p.Key) '$("$($p.Value)" -replace "'", "''")'" }
+    }
+    $self = $PSCommandPath -replace "'", "''"
+    $command = "`$failed = `$false; try { & '$self' $($argList -join ' '); `$failed = -not `$? -or `$LASTEXITCODE } catch { Write-Host `$_ -ForegroundColor Red; `$failed = `$true }; " +
+        "Read-Host 'Press Enter to close'; if (`$failed) { exit 1 }"
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+    Write-Host 'This needs administrator rights. Accept the Windows prompt to continue in a new window.'
+    try {
+        $proc = Start-Process powershell.exe -Verb RunAs -Wait -PassThru `
+            -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded
+    }
+    catch {
+        Write-Host 'Cancelled: no administrator rights were given, so nothing was changed.' -ForegroundColor Yellow
+        exit 1
+    }
+    exit $proc.ExitCode
+}
+
 $entry = @{ level = 'info' }
 try {
     $entry.result = Invoke-Guard $entry
@@ -522,5 +549,6 @@ catch {
     $name = if ($entry.ContainsKey('service')) { $entry.service } else { $ServiceName }
     try { $entry.service_state = [string](Get-Service -Name $name -ErrorAction Stop).Status } catch { }
     try { Write-GuardLog $entry } catch { }
+    if ($AcceptElytraChanges) { Write-Host $entry.message -ForegroundColor Red }
     exit 1
 }
