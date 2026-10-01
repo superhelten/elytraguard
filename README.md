@@ -107,8 +107,9 @@ built from `installer\elytraguard.iss` with [Inno Setup](https://jrsoftware.org/
 To install from the zip instead:
 
 ```powershell
-# In an elevated PowerShell (Terminal (Admin)). Use the folder the zip was
-# extracted to; Windows names a second download "elytraguard (1)".
+# In PowerShell. Without admin rights it asks for them (UAC) and carries on
+# in a new window. Use the folder the zip was extracted to; Windows names a
+# second download "elytraguard (1)".
 cd "$HOME\Downloads\elytraguard"
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 # Options: -IntervalMinutes 5 -GraceMinutes 10
@@ -202,8 +203,8 @@ PowerShell 7.
 
 If you used the setup program, uninstall ElytraGuard from *Settings > Apps >
 Installed apps*. It asks whether to delete the log and the record of
-Elytra's setup as well; a silent uninstall keeps them. Otherwise, in an
-elevated PowerShell:
+Elytra's setup as well; a silent uninstall keeps them. Otherwise, from the
+unzipped folder in PowerShell (it asks for admin rights the same way):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # keeps the log

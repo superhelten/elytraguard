@@ -233,10 +233,9 @@
         </li>
         <li>
           <span class="step-n">Step 2</span>
-          <h3>Run the installer as administrator</h3>
-          <p>Right-click Start, choose <strong>Terminal (Admin)</strong>, then run the commands below. If you have downloaded ElytraGuard before, Windows may have named the new folder <code>elytraguard (1)</code>; change the first line to match.</p>
+          <h3>Run the installer</h3>
+          <p>Open <strong>Terminal</strong> (right-click Start) and run the commands below. The installer asks for administrator rights and carries on in a new window. If you have downloaded ElytraGuard before, Windows may have named the new folder <code>elytraguard (1)</code>; change the first line to match.</p>
           <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>cd "$HOME\Downloads\elytraguard"
-Get-ChildItem *.ps1 | Unblock-File
 powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
           <p class="muted" style="margin-top:10px">This copies ElytraGuard to <code>C:\Program Files\ElytraGuard</code>, where normal programs can't change it, and registers the <code>ElytraGuard</code> scheduled task.</p>
         </li>
@@ -276,7 +275,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
   <section id="uninstall">
     <div class="wrap">
       <h2>Uninstall</h2>
-      <p class="muted">If you used the setup program, uninstall ElytraGuard from <strong>Settings &gt; Apps &gt; Installed apps</strong>. It asks whether to delete the log and the record of Elytra's setup too. Otherwise, from the unzipped folder, in an admin terminal. This removes the task and the program folder, and with <code>-RemoveLogs</code> also the log and the record of Elytra's setup. Elytra and WARDOGS are not touched.</p>
+      <p class="muted">If you used the setup program, uninstall ElytraGuard from <strong>Settings &gt; Apps &gt; Installed apps</strong>. It asks whether to delete the log and the record of Elytra's setup too. Otherwise, run this from the unzipped folder; like the installer, it asks for administrator rights. This removes the task and the program folder, and with <code>-RemoveLogs</code> also the log and the record of Elytra's setup. Elytra and WARDOGS are not touched.</p>
       <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs</code></pre></div>
     </div>
   </section>
