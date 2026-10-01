@@ -234,7 +234,7 @@
         <li>
           <span class="step-n">Step 2</span>
           <h3>Run the installer as administrator</h3>
-          <p>Right-click Start, choose <strong>Terminal (Admin)</strong>, then run:</p>
+          <p>Right-click Start, choose <strong>Terminal (Admin)</strong>, then run the commands below. If you have downloaded ElytraGuard before, Windows may have named the new folder <code>elytraguard (1)</code>; change the first line to match.</p>
           <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>cd "$HOME\Downloads\elytraguard"
 Get-ChildItem *.ps1 | Unblock-File
 powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
