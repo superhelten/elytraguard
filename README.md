@@ -107,9 +107,11 @@ built from `installer\elytraguard.iss` with [Inno Setup](https://jrsoftware.org/
 To install from the zip instead:
 
 ```powershell
-# In an elevated PowerShell, from the downloaded folder:
-Get-ChildItem *.ps1 | Unblock-File     # if you downloaded a zip
-.\install.ps1                          # or: .\install.ps1 -IntervalMinutes 5 -GraceMinutes 10
+# In an elevated PowerShell (Terminal (Admin)). Use the folder the zip was
+# extracted to; Windows names a second download "elytraguard (1)".
+cd "$HOME\Downloads\elytraguard"
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+# Options: -IntervalMinutes 5 -GraceMinutes 10
 ```
 
 The installer:
@@ -204,8 +206,8 @@ Elytra's setup as well; a silent uninstall keeps them. Otherwise, in an
 elevated PowerShell:
 
 ```powershell
-.\uninstall.ps1               # keeps the log
-.\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup and its hash
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1               # keeps the log
+powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs   # also removes the record of Elytra's setup and its hash
 ```
 
 ## License
