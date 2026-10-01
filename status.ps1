@@ -162,4 +162,8 @@ if ($last) {
 
 Write-Host ''
 Write-Host $taskNote -ForegroundColor DarkGray
+# The guard never goes online, so it can't say when an update is out.
+if ($last -and $last.version) {
+    Write-Host "Version $($last.version). New versions: https://github.com/superhelten/elytraguard/releases" -ForegroundColor DarkGray
+}
 if ($problems) { exit 1 }

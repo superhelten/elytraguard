@@ -52,6 +52,15 @@ Source: "..\status.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "..\uninstall.ps1"; DestDir: "{app}"
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"
 
+[Messages]
+FinishedLabel=ElytraGuard is installed. It runs at startup and every 5 minutes, and stops Elytra less than a minute after you quit WARDOGS.%n%nIts first run recorded how Elytra is set up now, as the baseline to compare with. If a game update changes that, the status shows a warning.
+
+[Run]
+; install.ps1 copies status.ps1 to {app}. Runs only if the install worked.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""& '{app}\status.ps1'; Read-Host 'Press Enter to close'"""; \
+  Description: "Show ElytraGuard's status now"; Flags: postinstall skipifsilent nowait; Check: InstallSucceeded
+
 [UninstallRun]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
   Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\uninstall.ps1""{code:RemoveLogsArg}"; \
@@ -60,6 +69,12 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 [Code]
 var
   RemoveLogs: Boolean;
+  InstallResult: Integer;
+
+function InstallSucceeded: Boolean;
+begin
+  Result := InstallResult = 0;
+end;
 
 function PowerShell: String;
 begin
@@ -82,6 +97,7 @@ begin
     ExpandConstant('{tmp}\install.ps1') + '" > "' + LogFile + '" 2>&1"';
   if not Exec(ExpandConstant('{cmd}'), Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     ResultCode := -1;
+  InstallResult := ResultCode;
   Log('install.ps1 exit code: ' + IntToStr(ResultCode));
   if LoadStringFromFile(LogFile, Output) then
     Log('install.ps1 output:' + #13#10 + String(Output));

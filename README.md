@@ -35,11 +35,20 @@ uses the PowerShell that ships with Windows.
 ### With the setup program
 
 The setup program isn't code-signed, so SmartScreen may say *Windows
-protected your PC*. Choose **More info**, then **Run anyway**. You can check
-the download against `SHA256SUMS.txt` on the release page:
+protected your PC*. Choose **More info**, then **Run anyway**.
+
+To check the download before running it, paste this into PowerShell. It
+compares the file with `SHA256SUMS.txt` from the release and prints `OK` or
+`MISMATCH`. It catches a damaged download or a copy from somewhere else; it
+can't help if the GitHub release itself were tampered with. For the zip,
+change the file name on the first line.
 
 ```powershell
-Get-FileHash "$HOME\Downloads\elytraguard-setup.exe" -Algorithm SHA256
+$file = "$HOME\Downloads\elytraguard-setup.exe"
+$sums = "$env:TEMP\elytraguard-SHA256SUMS.txt"
+Invoke-WebRequest https://github.com/superhelten/elytraguard/releases/latest/download/SHA256SUMS.txt -OutFile $sums -UseBasicParsing
+$line = Select-String -Path $sums -SimpleMatch "  $(Split-Path $file -Leaf)" | Select-Object -First 1
+if ($line -and $line.Line.Split(' ')[0] -eq (Get-FileHash $file -Algorithm SHA256).Hash) { 'OK' } else { 'MISMATCH: do not run this file' }
 ```
 
 Setup only unpacks the scripts and runs the same `install.ps1` as the zip
@@ -102,6 +111,15 @@ It shows `NOT OK` and exits with code 1 for:
 - Elytra still running without the game after several runs.
 
 Run it in an admin PowerShell to see the task details too.
+
+### Staying up to date
+
+ElytraGuard never goes online, so it can't tell you about new versions.
+To get an email when one is out, open the
+[repository](https://github.com/superhelten/elytraguard), choose **Watch**,
+then **Custom**, and tick **Releases**. `status.ps1` shows the version you
+have. To update, run the new setup program or `install.ps1` from the new
+zip; your log and the record of Elytra's setup are kept.
 
 ## Uninstall
 

@@ -85,7 +85,7 @@ function Write-GuardLog {
         try { Move-Item $LogPath "$LogPath.1" -Force } catch { }
     }
     $Entry['time'] = (Get-Date).ToUniversalTime().ToString('o')
-    $Entry['version'] = '1.2.3'
+    $Entry['version'] = '1.2.4'
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Entry | ConvertTo-Json -Compress) + "`r`n")
     # Share read/write/delete: Add-Content fails while a log shipper (e.g. a
     # Docker bind mount) has the file open.

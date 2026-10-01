@@ -39,7 +39,8 @@ $cases = @(
         exit = 0
         want = @('ElytraGuard: OK', 'Elytra anti-cheat is stopped right now', 'Last check just now',
                  'WARDOGS open, Elytra left running (3 checks)', 'WARDOGS closed, Elytra stopped by ElytraGuard',
-                 'Nothing to do, Elytra already stopped', 'Scheduled task')
+                 'Nothing to do, Elytra already stopped', 'Scheduled task',
+                 'Version test. New versions: https://github.com/superhelten/elytraguard/releases')
         not  = @('service=', 'game_running', 'NOT OK', "'Stopped'")
     }
     @{

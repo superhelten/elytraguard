@@ -258,14 +258,24 @@
       <h2>Install</h2>
       <p class="muted">You need Windows 10 or 11 and an administrator account. There is nothing else to install: it uses the PowerShell that ships with Windows.</p>
       <h3>With the setup program</h3>
-      <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard-setup.exe">elytraguard-setup.exe</a>, run it and accept the admin prompt. The setup program isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Its hash is in <code>SHA256SUMS.txt</code> on the <a href="https://github.com/superhelten/elytraguard/releases/latest">release page</a>. Setup only unpacks the scripts and runs the same <code>install.ps1</code> as the steps below, and adds ElytraGuard to <strong>Settings &gt; Apps &gt; Installed apps</strong> so you can uninstall it there. Then check that it works, as in step 3.</p>
+      <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard-setup.exe">elytraguard-setup.exe</a>, run it and accept the admin prompt. The setup program isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Setup only unpacks the scripts and runs the same <code>install.ps1</code> as the steps below, and adds ElytraGuard to <strong>Settings &gt; Apps &gt; Installed apps</strong> so you can uninstall it there. Then check that it works, as in step 3.</p>
+      <p class="muted">To check the download before running it, paste this into PowerShell. It compares the file with <code>SHA256SUMS.txt</code> from the release and prints <strong>OK</strong> or <strong>MISMATCH</strong>. It catches a damaged download or a copy from somewhere else, but can't help if the GitHub release itself were tampered with.</p>
+      <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>$file = "$HOME\Downloads\elytraguard-setup.exe"
+$sums = "$env:TEMP\elytraguard-SHA256SUMS.txt"
+Invoke-WebRequest https://github.com/superhelten/elytraguard/releases/latest/download/SHA256SUMS.txt -OutFile $sums -UseBasicParsing
+$line = Select-String -Path $sums -SimpleMatch "  $(Split-Path $file -Leaf)" | Select-Object -First 1
+if ($line -and $line.Line.Split(' ')[0] -eq (Get-FileHash $file -Algorithm SHA256).Hash) { 'OK' } else { 'MISMATCH: do not run this file' }</code></pre></div>
       <h3 style="margin-top:28px">Or from the zip</h3>
       <ol class="steps">
         <li>
           <span class="step-n">Step 1</span>
           <h3>Download and unzip</h3>
-          <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">elytraguard.zip</a> and extract it, for example to your Downloads folder. To check that the download wasn't tampered with, compare its hash with <code>SHA256SUMS.txt</code> on the <a href="https://github.com/superhelten/elytraguard/releases/latest">release page</a>:</p>
-          <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>Get-FileHash "$HOME\Downloads\elytraguard.zip" -Algorithm SHA256</code></pre></div>
+          <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">elytraguard.zip</a> and extract it, for example to your Downloads folder. To check the download, paste this into PowerShell; it prints <strong>OK</strong> or <strong>MISMATCH</strong>:</p>
+          <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>$file = "$HOME\Downloads\elytraguard.zip"
+$sums = "$env:TEMP\elytraguard-SHA256SUMS.txt"
+Invoke-WebRequest https://github.com/superhelten/elytraguard/releases/latest/download/SHA256SUMS.txt -OutFile $sums -UseBasicParsing
+$line = Select-String -Path $sums -SimpleMatch "  $(Split-Path $file -Leaf)" | Select-Object -First 1
+if ($line -and $line.Line.Split(' ')[0] -eq (Get-FileHash $file -Algorithm SHA256).Hash) { 'OK' } else { 'MISMATCH: do not run this file' }</code></pre></div>
         </li>
         <li>
           <span class="step-n">Step 2</span>
@@ -290,6 +300,8 @@ What happened:
   20:55-21:05  Nothing to do, Elytra already stopped (3 checks)</code></pre></div>
         </li>
       </ol>
+      <h3 style="margin-top:28px">Staying up to date</h3>
+      <p>ElytraGuard never goes online, so it can't tell you about new versions. To get an email when one is out, open the <a href="https://github.com/superhelten/elytraguard">repository</a>, choose <strong>Watch</strong>, then <strong>Custom</strong>, and tick <strong>Releases</strong>. <code>status.ps1</code> shows the version you have. To update, run the new setup program; your log and the record of Elytra's setup are kept.</p>
     </div>
   </section>
 
