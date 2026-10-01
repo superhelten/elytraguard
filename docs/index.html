@@ -27,7 +27,7 @@
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Windows 10, Windows 11",
   "url": "https://superhelten.github.io/elytraguard/",
-  "downloadUrl": "https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip",
+  "downloadUrl": "https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard-setup.exe",
   "sameAs": "https://github.com/superhelten/elytraguard",
   "license": "https://opensource.org/licenses/MIT",
   "isAccessibleForFree": true,
@@ -181,9 +181,9 @@
     <h1>Elytra runs while you play. Not after.</h1>
     <p class="lede">WARDOGS starts the Elytra anti-cheat as a Windows service with full system rights. It can keep running after you close the game. ElytraGuard stops it once the game is gone. It is free, open source and plain PowerShell you can read before you run it.</p>
     <div class="cta">
-      <a class="btn btn-primary" href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard.zip">
+      <a class="btn btn-primary" href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard-setup.exe">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-        Download (.zip)
+        Download setup (.exe)
       </a>
       <a class="btn btn-ghost" href="https://github.com/superhelten/elytraguard">Read the source</a>
     </div>
@@ -221,6 +221,9 @@
     <div class="wrap">
       <h2>Install</h2>
       <p class="muted">You need Windows 10 or 11 and an administrator account. There is nothing else to install: it uses the PowerShell that ships with Windows.</p>
+      <h3>With the setup program</h3>
+      <p>Download <a href="https://github.com/superhelten/elytraguard/releases/latest/download/elytraguard-setup.exe">elytraguard-setup.exe</a>, run it and accept the admin prompt. The setup program isn't code-signed, so SmartScreen may say <em>Windows protected your PC</em>: choose <strong>More info</strong>, then <strong>Run anyway</strong>. Its hash is in <code>SHA256SUMS.txt</code> on the <a href="https://github.com/superhelten/elytraguard/releases/latest">release page</a>. Setup only unpacks the scripts and runs the same <code>install.ps1</code> as the steps below, and adds ElytraGuard to <strong>Settings &gt; Apps &gt; Installed apps</strong> so you can uninstall it there. Then check that it works, as in step 3.</p>
+      <h3 style="margin-top:28px">Or from the zip</h3>
       <ol class="steps">
         <li>
           <span class="step-n">Step 1</span>
@@ -273,7 +276,7 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1</code></pre></div>
   <section id="uninstall">
     <div class="wrap">
       <h2>Uninstall</h2>
-      <p class="muted">From the same folder, in an admin terminal. This removes the task and the program folder, and with <code>-RemoveLogs</code> also the log and the record of Elytra's setup. Elytra and WARDOGS are not touched.</p>
+      <p class="muted">If you used the setup program, uninstall ElytraGuard from <strong>Settings &gt; Apps &gt; Installed apps</strong>. It asks whether to delete the log and the record of Elytra's setup too. Otherwise, from the unzipped folder, in an admin terminal. This removes the task and the program folder, and with <code>-RemoveLogs</code> also the log and the record of Elytra's setup. Elytra and WARDOGS are not touched.</p>
       <div class="code"><div class="code-head"><span>PowerShell</span><button class="copy" type="button" aria-live="polite">Copy</button></div><pre><code>powershell -ExecutionPolicy Bypass -File .\uninstall.ps1 -RemoveLogs</code></pre></div>
     </div>
   </section>

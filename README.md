@@ -94,6 +94,18 @@ else. The `footprint` field of each log line is `recorded`, `same`,
 Requires Windows 10 or 11 and admin rights. It uses the built-in Windows
 PowerShell 5.1.
 
+The easiest way is `elytraguard-setup.exe` from the
+[latest release](https://github.com/superhelten/elytraguard/releases/latest).
+Run it and accept the admin prompt. The setup program isn't code-signed, so
+SmartScreen may say "Windows protected your PC"; choose *More info*, then
+*Run anyway*. Setup only unpacks the scripts and runs the same `install.ps1`
+described below, so both ways end in the same state. It also adds ElytraGuard
+to *Settings > Apps > Installed apps*, where you can uninstall it. It is
+built from `installer\elytraguard.iss` with [Inno Setup](https://jrsoftware.org/isinfo.php)
+6 by `installer\build.ps1`.
+
+To install from the zip instead:
+
 ```powershell
 # In an elevated PowerShell, from the downloaded folder:
 Get-ChildItem *.ps1 | Unblock-File     # if you downloaded a zip
@@ -185,6 +197,11 @@ PowerShell 7.
   as an update and which as a warning.
 
 ## Uninstall
+
+If you used the setup program, uninstall ElytraGuard from *Settings > Apps >
+Installed apps*. It asks whether to delete the log and the record of
+Elytra's setup as well; a silent uninstall keeps them. Otherwise, in an
+elevated PowerShell:
 
 ```powershell
 .\uninstall.ps1               # keeps the log
