@@ -95,7 +95,7 @@ var
 begin
   if CurStep <> ssPostInstall then
     Exit;
-  WizardForm.StatusLabel.Caption := 'Registering the scheduled task...';
+  WizardForm.StatusLabel.Caption := 'Registering the scheduled task and waiting for its first check...';
   LogFile := ExpandConstant('{tmp}\install-output.txt');
   Params := '/c ""' + PowerShell + '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{tmp}\install.ps1') + '" > "' + LogFile + '" 2>&1"';

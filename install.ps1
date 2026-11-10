@@ -80,10 +80,35 @@ $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccou
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings -Principal $principal `
     -Description 'Stops the Elytra anti-cheat service (WARDOGS) when the game is not running. https://github.com/superhelten/elytraguard' -Force | Out-Null
 
+$LogPath = Join-Path $LogDir 'elytraguard.log'
+function Get-LastLogLine {
+    try { if (Test-Path $LogPath) { Get-Content $LogPath -Tail 1 -ErrorAction Stop } } catch { }
+}
+
+# Setup shows status.ps1 right after this. On a reinstall the log still ends
+# with a line from the old install, possibly weeks old, and status.ps1 would
+# report that the guard has stopped running. So wait until this first run has
+# logged. Every run logs, also one that then waits for WARDOGS to close.
+$before = Get-LastLogLine
 Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 5
+$deadline = (Get-Date).AddSeconds(60)
+do {
+    Start-Sleep -Seconds 1
+    $last = Get-LastLogLine
+} while ($last -eq $before -and (Get-Date) -lt $deadline)
+
 $info = Get-ScheduledTaskInfo -TaskName $TaskName
-Write-Host "ElytraGuard installed. First run result: $($info.LastTaskResult) (0 = OK)"
-Write-Host "Log: $(Join-Path $LogDir 'elytraguard.log')"
+$runState = switch ($info.LastTaskResult) {
+    0 { 'finished' }
+    267009 {
+        if ($last -match '"result":\s*"game_running"') { 'still running (it keeps running while WARDOGS is open)' }
+        else { 'still running' }
+    }
+    267011 { 'not started yet' }
+    default { "exited with code $_" }
+}
+Write-Host "ElytraGuard installed. First run: $runState"
+if ($last -ne $before) { Write-Host "First run logged: $last" }
+else { Write-Host 'The first run has not written to the log after 60 seconds; the status may show an older check until it does.' }
+Write-Host "Log: $LogPath"
 Write-Host "Check health any time: & `"$BinDir\status.ps1`""
-if (Test-Path (Join-Path $LogDir 'elytraguard.log')) { Get-Content (Join-Path $LogDir 'elytraguard.log') -Tail 1 }
